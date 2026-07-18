@@ -427,22 +427,6 @@ function getPlayerRank() {
     return myRank;
 }
 
-// 👑 常時、正確な順位（1〜12位）を算出する関数
-function getPlayerRank() {
-    if (raceState !== 2) return 1;
-    let myRank = 1;
-    playerProgress = (itemBulletTimer > 0) ? bulletProgress : calculatePlayerProgress();
-    let playerProgressVal = playerLap + playerProgress;
-
-    npcs.forEach(npc => {
-        let npcProgressVal = npc.lap + npc.progress;
-        if (npcProgressVal > playerProgressVal) {
-            myRank++;
-        }
-    });
-    return myRank;
-}
-
 // 🏁 プレイヤーのゴールライン通過・周回判定（安全修正版）
 if (carGroup.position.z < -100) {
     midCheckpointPassed = true; // コースの裏側（奥）を通ったフラグ
