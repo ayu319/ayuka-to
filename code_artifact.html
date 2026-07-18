@@ -324,7 +324,7 @@ let coins = 0;
 let playerProgress = 0;
 
 // アイテム管理 (テレサ👻・キラー🚀を追加したプロ仕様テーブル)
-const itemTypes = ["キノコ", "緑甲羅", "赤甲羅", "サンダー", "デカキノコ", "金キノコ", "スター", "テレサ", "キラー"];
+const itemTypes = ["キノコ", "緑甲羅", "赤甲羅", "サンダー", "デカキノコ", "金キノコ", "スター", "テレサ"];
 let heldItems = [null, null];
 let isItemRoulette = false;
 let rouletteSlot = -1; 
@@ -436,13 +436,13 @@ function getRandomItemByRank(rank) {
     let pool = [];
     if (rank <= 3) {
         // 上位 (1位〜3位)
-        pool = ["キノコ", "キノコ", "緑甲羅", "緑甲羅", "赤甲羅", "テレサ"];
+        pool = ["緑甲羅", "緑甲羅", "キノコ"];
     } else if (rank <= 7) {
         // 中位 (4位〜7位)
         pool = ["キノコ", "赤甲羅", "赤甲羅", "デカキノコ", "金キノコ", "スター", "テレサ"];
     } else {
         // 下位 (8位〜12位) [🚀キラー高確率出現]
-        pool = ["金キノコ", "スター", "スター", "サンダー", "キラー", "キラー", "キラー", "テレサ"];
+        pool = ["金キノコ",　"金キノコ",　"金キノコ", "スター", "サンダー", "テレサ"];
     }
     return pool[Math.floor(Math.random() * pool.length)];
 }
