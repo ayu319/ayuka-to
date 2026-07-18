@@ -411,32 +411,51 @@ function calculatePlayerProgress() {
     return bestProgress;
 }
 
-// 🏁 プレイヤーのゴールライン通過・周回判定（修正版）
-        if (carGroup.position.z < -100) {
-            midCheckpointPassed = true; // コースの裏側（奥）を通ったフラグ
-        }
+// 👑 常時、正確な順位（1〜12位）を算出する関数
+function getPlayerRank() {
+    if (raceState !== 2) return 1;
+    let myRank = 1;
+    playerProgress = (itemBulletTimer > 0) ? bulletProgress : calculatePlayerProgress();
+    let playerProgressVal = playerLap + playerProgress;
 
-        // ゴールライン（z = 50付近）をまたいだ瞬間の判定
-        if (midCheckpointPassed && carGroup.position.z < 55 && carGroup.position.z > 45 && Math.abs(carGroup.position.x) < 40) {
-            midCheckpointPassed = false; // フラグをリセット
-            
-            if (playerLap < 3) {
-                playerLap++;
-                playTone(523.25, 0.08, 'sine', 0.1);
-                setTimeout(() => playTone(659.25, 0.08, 'sine', 0.1), 80);
-                
-                document.getElementById("lap-text").innerText = `Lap: ${playerLap}/3`;
-                turboText.innerText = `🏁 LAP ${playerLap} に突入！ 🏁`;
-                turboText.style.color = "#00ffff";
-            } else if (!isFinished) {
-                isFinished = true;
-                raceState = 3; // レース終了
-                document.getElementById("countdown").innerText = "FINISH!";
-                document.getElementById("lap-text").innerText = "Lap: 3/3 (GOAL)";
-                playTone(880, 0.5, 'square', 0.2);
-            }
+    npcs.forEach(npc => {
+        let npcProgressVal = npc.lap + npc.progress;
+        if (npcProgressVal > playerProgressVal) {
+            myRank++;
         }
-    
+    });
+    return myRank;
+}
+
+// 👑 常時、正確な順位（1〜12位）を算出する関数
+function getPlayerRank() {
+    if (raceState !== 2) return 1;
+    let myRank = 1;
+    playerProgress = (itemBulletTimer > 0) ? bulletProgress : calculatePlayerProgress();
+    let playerProgressVal = playerLap + playerProgress;
+
+    npcs.forEach(npc => {
+        let npcProgressVal = npc.lap + npc.progress;
+        if (npcProgressVal > playerProgressVal) {
+            myRank++;
+        }
+    });
+    return myRank;
+}
+
+// 🏁 プレイヤーのゴールライン通過・周回判定（安全修正版）
+if (carGroup.position.z < -100) {
+    midCheckpointPassed = true; // コースの裏側（奥）を通ったフラグ
+}
+
+if (carGroup.position.z > 45 && carGroup.position.z < 55 && Math.abs(carGroup.position.x) < 40) {
+    if (midCheckpointPassed && playerLap < 3) {
+        midCheckpointPassed = false; // フラグをリセット
+        playerLap++;
+        document.getElementById("lap-text").innerText = `Lap: ${playerLap}/3`;
+    }
+}
+
 // 🎰 順位に応じたアイテム抽選テーブル
 function getRandomItemByRank(rank) {
     if (raceState !== 2) {
