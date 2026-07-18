@@ -426,8 +426,8 @@ function getPlayerRank() {
     });
     return myRank;
 }
-
-// 🏁 プレイヤーのゴールライン通過・周回判定（安全修正版）
+    
+// 🏁 プレイヤーのゴールライン通過・周回判定（修正版）
 if (carGroup.position.z < -100) {
     midCheckpointPassed = true; // コースの裏側（奥）を通ったフラグ
 }
@@ -449,12 +449,12 @@ function getRandomItemByRank(rank) {
     let pool = [];
     if (rank <= 3) {
         // 上位 (1位〜3位)
-        pool = ["緑甲羅", "緑甲羅", "キノコ"];
+        pool = ["緑甲羅",　"緑甲羅",　"緑甲羅",　"緑甲羅", "緑甲羅", "キノコ"];
     } else if (rank <= 7) {
         // 中位 (4位〜7位)
         pool = ["キノコ", "赤甲羅", "赤甲羅", "デカキノコ", "金キノコ", "スター", "テレサ"];
     } else {
-        // 下位 (8位〜12位) [🚀キラー高確率出現]
+        // 下位 (8位〜12位) 
         pool = ["金キノコ",　"金キノコ",　"金キノコ", "スター", "サンダー", "テレサ"];
     }
     return pool[Math.floor(Math.random() * pool.length)];
