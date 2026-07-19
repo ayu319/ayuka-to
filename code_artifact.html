@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -323,7 +324,7 @@ let coins = 0;
 // 🏁 プレイヤー用・リアルタイム進捗度バッファ
 let playerProgress = 0;
 
-// アイテム管理 (テレサ👻・キラー🚀を追加したプロ仕様テーブル)
+// アイテム管理 (テレサ👻を追加したプロ仕様テーブル)
 const itemTypes = ["キノコ", "緑甲羅", "赤甲羅", "サンダー", "デカキノコ", "金キノコ", "スター", "テレサ"];
 let heldItems = [null, null];
 let isItemRoulette = false;
@@ -381,18 +382,22 @@ function initTrackLengths() {
 initTrackLengths();
 
 // プレイヤーのコース上の正確な進捗率(0.0〜1.0)を算出する計算エンジン
+let lastPlayerSegment = 0; // 前回検出した区間（順位のガタつき防止用）
 function calculatePlayerProgress() {
     let bestDist = Infinity;
     let bestProgress = 0;
-    let accumulatedLength = 0;
+    let bestSegment = lastPlayerSegment;
     const px = carGroup.position.x;
     const pz = carGroup.position.z;
-    
-    for (let i = 0; i < NODE_COUNT; i++) {
+
+    // 前回の区間の近く（前後4区間）だけを探索し、離れた区間への誤ジャンプを防ぐ
+    const WINDOW = 4;
+    for (let offset = -WINDOW; offset <= WINDOW; offset++) {
+        let i = ((lastPlayerSegment + offset) % NODE_COUNT + NODE_COUNT) % NODE_COUNT;
         let p1 = npcPathNodes[i];
         let p2 = npcPathNodes[(i + 1) % NODE_COUNT];
         let len = segmentLengths[i];
-        
+
         let t = 0;
         if (len > 0) {
             t = ((px - p1.x) * (p2.x - p1.x) + (pz - p1.z) * (p2.z - p1.z)) / (len * len);
@@ -401,43 +406,40 @@ function calculatePlayerProgress() {
         let projX = p1.x + t * (p2.x - p1.x);
         let projZ = p1.z + t * (p2.z - p1.z);
         let dist = Math.sqrt((px - projX)**2 + (pz - projZ)**2);
-        
+
         if (dist < bestDist) {
             bestDist = dist;
+            bestSegment = i;
+            let accumulatedLength = 0;
+            for (let k = 0; k < i; k++) accumulatedLength += segmentLengths[k];
             bestProgress = (accumulatedLength + t * len) / totalTrackLength;
         }
-        accumulatedLength += len;
     }
+    lastPlayerSegment = bestSegment;
     return bestProgress;
 }
 
-// 👑 常時、正確な順位（1〜12位）を算出する関数
+// 👑 常時、正確な順位（1〜12位）を算出する関数（10ピクセル区切りシステム）
 function getPlayerRank() {
-    if (raceState !== 2) return 1;
+    if (raceState === 0 || raceState === 1) return 1;
     let myRank = 1;
     playerProgress = (itemBulletTimer > 0) ? bulletProgress : calculatePlayerProgress();
-    let playerProgressVal = playerLap + playerProgress;
-
+    
+    // 💡 プレイヤーの進んだ距離を計算し、「10ピクセル」ごとに切り捨てる
+    let playerDist = (playerLap + playerProgress) * totalTrackLength;
+    let playerStep = Math.floor(playerDist / 10) * 10; // ←ここが10px単位の秘密！
+    
     npcs.forEach(npc => {
-        let npcProgressVal = npc.lap + npc.progress;
-        if (npcProgressVal > playerProgressVal) {
+        // 💡 NPCの進んだ距離も同じように10ピクセルごとに切り捨てる
+        let npcDist = (npc.lap + npc.progress) * totalTrackLength;
+        let npcStep = Math.floor(npcDist / 10) * 10;
+        
+        // 10ピクセルごとの「マス目」でNPCが先に行っていたら順位を下げる
+        if (npcStep > playerStep) {
             myRank++;
         }
     });
     return myRank;
-}
-    
-// 🏁 プレイヤーのゴールライン通過・周回判定（修正版）
-if (carGroup.position.z < -100) {
-    midCheckpointPassed = true; // コースの裏側（奥）を通ったフラグ
-}
-
-if (carGroup.position.z > 45 && carGroup.position.z < 55 && Math.abs(carGroup.position.x) < 40) {
-    if (midCheckpointPassed && playerLap < 3) {
-        midCheckpointPassed = false; // フラグをリセット
-        playerLap++;
-        document.getElementById("lap-text").innerText = `Lap: ${playerLap}/3`;
-    }
 }
 
 // 🎰 順位に応じたアイテム抽選テーブル
@@ -449,13 +451,13 @@ function getRandomItemByRank(rank) {
     let pool = [];
     if (rank <= 3) {
         // 上位 (1位〜3位)
-        pool = ["緑甲羅",　"緑甲羅",　"緑甲羅",　"緑甲羅", "緑甲羅", "キノコ"];
+        pool = ["キノコ", "キノコ", "緑甲羅", "緑甲羅", "赤甲羅", "テレサ"];
     } else if (rank <= 7) {
         // 中位 (4位〜7位)
         pool = ["キノコ", "赤甲羅", "赤甲羅", "デカキノコ", "金キノコ", "スター", "テレサ"];
     } else {
-        // 下位 (8位〜12位) 
-        pool = ["金キノコ",　"金キノコ",　"金キノコ", "スター", "サンダー", "テレサ"];
+        // 下位 (8位〜12位)
+        pool = ["金キノコ", "スター", "スター", "サンダー", "テレサ", "テレサ"];
     }
     return pool[Math.floor(Math.random() * pool.length)];
 }
@@ -532,6 +534,7 @@ window.addEventListener('keydown', (e) => {
     if (e.key === " " && !keys[" "]) {
         keys[" "] = true;
         if (itemBulletTimer > 0) return; // キラー中はジャンプ・トリックをバイパス
+        if (isSquishedTimer > 0) return; // 被弾スタン中はジャンプ・トリック不可
         
         const distToPole1XZ = Math.sqrt(Math.pow(carGroup.position.x - pole1Group.position.x, 2) + Math.pow(carGroup.position.z - pole1Group.position.z, 2));
         const distToPole2XZ = Math.sqrt(Math.pow(carGroup.position.x - pole2Group.position.x, 2) + Math.pow(carGroup.position.z - pole2Group.position.z, 2));
@@ -561,13 +564,13 @@ window.addEventListener('keydown', (e) => {
 
 window.addEventListener('keyup', (e) => { 
     let k = e.key.toLowerCase(); if (k === "shift") k = "shift";
-    if (e.key === " ") { keys[" "] = false; if (itemBulletTimer > 0) return; if (jumpChargeTime > 15 && carY <= 0.15) { let powerRatio = Math.min(jumpChargeTime / 45, 1.0); jumpVelocity = 0.45 + (0.28 * powerRatio); turboTimer = Math.floor(15 + (20 * powerRatio)); speed = 2.0 + (0.2 * powerRatio); hasJumpActioned = true; soundBoost(); } else if (carY <= 0.15) { jumpVelocity = 0.35; } jumpChargeTime = 0; }
+    if (e.key === " ") { keys[" "] = false; if (itemBulletTimer > 0) return; if (isSquishedTimer > 0) { jumpChargeTime = 0; return; } if (jumpChargeTime > 15 && carY <= 0.15) { let powerRatio = Math.min(jumpChargeTime / 45, 1.0); jumpVelocity = 0.45 + (0.28 * powerRatio); turboTimer = Math.floor(15 + (20 * powerRatio)); speed = 2.0 + (0.2 * powerRatio); hasJumpActioned = true; soundBoost(); } else if (carY <= 0.15) { jumpVelocity = 0.35; } jumpChargeTime = 0; }
     if (k in keys) keys[k] = false;
 });
 
 function startRaceGridPlacement() {
     initAudio(); 
-    speed = 0; playerLap = 1; midCheckpointPassed = false; isFinished = false; isSquishedTimer = 0; carY = 0; jumpVelocity = 0;
+    speed = 0; playerLap = 1; midCheckpointPassed = false; isFinished = false; isSquishedTimer = 0; carY = 0; jumpVelocity = 0; lastPlayerSegment = 0;
     hasJumpActioned = false; jumpActionTimer = 0; carGroup.scale.set(1, 1, 1); carModel.rotation.set(0,0,0);
     heldItems = [null, null]; isItemRoulette = false; rouletteSlot = -1; itemMushroomTimer = 0; itemMegaTimer = 0; itemGoldenTimer = 0; itemStarTimer = 0; itemBooTimer = 0; itemBulletTimer = 0; bulletProgress = 0; jumpChargeTime = 0;
     isWallRiding = false; wallRideSide = 0; wallKickVelocityX = 0; wallKickIgnoreTimer = 0; poleSpinTimer = 0;
@@ -667,14 +670,6 @@ function useItem() {
         }
         turboText.style.color = "#eeeeee";
     }
-    else if (item === "キラー") {
-        itemBulletTimer = 220; 
-        soundBoost();
-        turboText.innerText = "🚀 キラー変身！自動超高速デンジャラス突進！！！ 🚀";
-        turboText.style.color = "#ff3333";
-        // プレイヤーの現在位置から最も近いノードに進捗を強制同期
-        bulletProgress = calculatePlayerProgress();
-    }
 
     heldItems[0] = heldItems[1]; heldItems[1] = null; updateItemUI();
 }
@@ -700,7 +695,7 @@ function useNpcItem(npc) {
         }
     } else if (item === "サンダー") {
         if (itemMegaTimer <= 0 && itemStarTimer <= 0 && itemBooTimer <= 0 && itemBulletTimer <= 0 && playerHitInvincibleTimer <= 0) { 
-            isSquishedTimer = 120; speed = 0; itemMushroomTimer = 0; itemGoldenTimer = 0; soundHit(); 
+            isSquishedTimer = 120; speed = 0; turboTimer = 0; isDrifting = false; driftCharge = 0; turboState = 0; itemMushroomTimer = 0; itemGoldenTimer = 0; soundHit(); 
             dropPlayerItems(); // ⚡ サンダー被弾時のみアイテムを完全に落とす
             dropCoins();
             playerHitInvincibleTimer = 180; 
@@ -779,7 +774,7 @@ function animate() {
                     if (playerHitInvincibleTimer > 0) {
                         turboText.innerText = "🛡️ 被弾無敵バリアにより甲羅を弾き飛ばした！ 🛡️"; turboText.style.color = "#33ffff";
                     } else {
-                        isSquishedTimer = 90; speed = 0; turboTimer = 0; itemMushroomTimer = 0; itemGoldenTimer = 0; 
+                        isSquishedTimer = 90; speed = 0; turboTimer = 0; isDrifting = false; driftCharge = 0; turboState = 0; itemMushroomTimer = 0; itemGoldenTimer = 0; 
                         playerHitInvincibleTimer = 180; 
                         soundHit(); 
                         dropCoins(); // ❌ サンダー以外アイテムは落とさない
@@ -823,7 +818,7 @@ function animate() {
         let npcPicked = false;
         for (let j = 0; j < npcs.length; j++) {
             const npcDistXZ = Math.sqrt(Math.pow(npcs[j].mesh.position.x - dItem.mesh.position.x, 2) + Math.pow(npcs[j].mesh.position.z - dItem.mesh.position.z, 2));
-            if (!npcs[j].heldItem && npcDistXZ < 4.5 && dItem.type !== "コイン") {
+            if (!npcs[j].heldItem && npcDistXZ < 9 && dItem.type !== "コイン") {
                 npcs[j].heldItem = dItem.type; npcs[j].itemUseTimer = Math.floor(Math.random() * 120) + 60;
                 scene.remove(dItem.mesh); droppedItems.splice(i, 1); npcPicked = true; break;
             }
@@ -977,20 +972,20 @@ function animate() {
         else if (box.mesh.visible) {
             if (carPos.distanceTo(box.mesh.position) < 8) {
                 box.mesh.visible = false; box.respawnTimer = 300;
-                if (!isItemRoulette && itemGoldenTimer <= 0 && itemStarTimer <= 0 && itemBulletTimer <= 0) {
+                if (!isItemRoulette && itemBulletTimer <= 0) {
                     soundItem();
                     if (!heldItems[0]) { isItemRoulette = true; rouletteSlot = 0; rouletteTimer = 1000; } 
                     else if (!heldItems[1]) { isItemRoulette = true; rouletteSlot = 1; rouletteTimer = 1000; }
                 }
             } else {
                 for (let j = 0; j < npcs.length; j++) {
-                    if (npcs[j].mesh.position.distanceTo(box.mesh.position) < 8) {
+                    if (npcs[j].mesh.position.distanceTo(box.mesh.position) < 14) {
                         box.mesh.visible = false; box.respawnTimer = 300;
                         if (!npcs[j].heldItem && npcs[j].boostTimer <= 0) { 
                             let npcItem = itemTypes[Math.floor(Math.random() * itemTypes.length)];
                             if (npcItem === "サンダー" && Math.random() > 0.15) { npcItem = "キノコ"; }
                             npcs[j].heldItem = npcItem; 
-                            npcs[j].itemUseTimer = Math.floor(Math.random() * 120) + 60; 
+                            npcs[j].itemUseTimer = Math.floor(Math.random() * 60) + 20; 
                         }
                         break;
                     }
@@ -1117,6 +1112,7 @@ function animate() {
     }
     
     if (raceState !== 1) {
+        let forwardVector = new THREE.Vector3(-Math.sin(carGroup.rotation.y), 0, -Math.cos(carGroup.rotation.y)).normalize();
         if (itemBulletTimer > 0) {
             // 🚀 【キラー自動巡航プログラム】
             bulletProgress += 0.0038; 
@@ -1160,7 +1156,7 @@ function animate() {
             }
         } else {
             if (poleSpinTimer <= 0) { carGroup.rotation.y += turnAngle; }
-            const forwardVector = new THREE.Vector3(-Math.sin(carGroup.rotation.y), 0, -Math.cos(carGroup.rotation.y)).normalize();
+            forwardVector = new THREE.Vector3(-Math.sin(carGroup.rotation.y), 0, -Math.cos(carGroup.rotation.y)).normalize();
             carGroup.position.addScaledVector(forwardVector, speed);
         }
         
@@ -1184,7 +1180,7 @@ function animate() {
 
     npcs.forEach((npc, index) => {
         if (raceState === 2) { 
-            let nSpeed = 0.00095; // 通常NPCスピード
+            let nSpeed = Math.max(speed, 0.3) / totalTrackLength; // プレイヤーと同じ速度で走行（停止中でも最低速度は保証）
 
             // プレイヤーが前にいる場合、追従を強めてデッドヒートにする
             let playerProgressVal = playerLap + playerProgress;
@@ -1199,7 +1195,7 @@ function animate() {
             if (npc.isStar > 0) {
                 npc.isStar--;
                 if (npc.mesh.position.distanceTo(carGroup.position) < 7.0 && itemStarTimer <= 0 && itemMegaTimer <= 0 && itemBooTimer <= 0 && isSquishedTimer <= 0 && playerHitInvincibleTimer <= 0) {
-                    isSquishedTimer = 60; speed = 0; itemMushroomTimer = 0; itemGoldenTimer = 0;
+                    isSquishedTimer = 60; speed = 0; turboTimer = 0; isDrifting = false; driftCharge = 0; turboState = 0; itemMushroomTimer = 0; itemGoldenTimer = 0;
                     playerHitInvincibleTimer = 180; 
                     soundHit(); 
                     dropCoins(); // ❌ 通常被弾時はコインロストのみ
