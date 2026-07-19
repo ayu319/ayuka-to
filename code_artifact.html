@@ -1197,12 +1197,26 @@ function animate() {
             npc.progress += nSpeed; if (npc.progress >= 1) { npc.progress -= 1; npc.lap++; }
             if (npc.heldItem) { npc.itemUseTimer--; if (npc.itemUseTimer <= 0) { useNpcItem(npc); } }
         }
-        let p = Math.max(0, npc.progress);
-        let segment = Math.floor(p * NODE_COUNT); let segmentPercent = (p * NODE_COUNT) % 1;
-        let startNode = npcPathNodes[segment % NODE_COUNT]; let endNode = npcPathNodes[(segment + 3) % NODE_COUNT];
-        npc.mesh.position.set(startNode.x + (endNode.x - startNode.x) * segmentPercent, 0, startNode.z + (endNode.z - startNode.z) * segmentPercent + ((index%2===0)?5:-5));
-        if(npc.isMega > 0) { npc.isMega--; npc.mesh.scale.set(2.3, 2.3, 2.3); }
-        npc.mesh.lookAt(endNode.x, 0, endNode.z);
+let p = Math.max(0, npc.progress);
+let segment = Math.floor(p * NODE_COUNT);
+let segmentPercent = (p * NODE_COUNT) % 1;
+
+let startNode = npcPathNodes[segment % NODE_COUNT];
+let endNode = npcPathNodes[(segment + 1) % NODE_COUNT];
+let lookNode = npcPathNodes[(segment + 3) % NODE_COUNT];
+
+npc.mesh.position.set(
+    startNode.x + (endNode.x - startNode.x) * segmentPercent,
+    0,
+    startNode.z + (endNode.z - startNode.z) * segmentPercent + ((index % 2 === 0) ? 5 : -5)
+);
+
+if (npc.isMega > 0) {
+    npc.isMega--;
+    npc.mesh.scale.set(2.3, 2.3, 2.3);
+}
+
+npc.mesh.lookAt(lookNode.x, 0, lookNode.z);
     });
 
     renderer.render(scene, camera);
