@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -1181,13 +1180,6 @@ function animate() {
     npcs.forEach((npc, index) => {
         if (raceState === 2) { 
             let nSpeed = Math.max(speed, 0.3) / totalTrackLength; // プレイヤーと同じ速度で走行（停止中でも最低速度は保証）
-
-            // プレイヤーが前にいる場合、追従を強めてデッドヒートにする
-            let playerProgressVal = playerLap + playerProgress;
-            let npcProgressVal = npc.lap + npc.progress;
-            if (npcProgressVal < playerProgressVal) {
-                nSpeed += 0.0003; 
-            }
             
             if (npc.isSquished > 0) { npc.isSquished--; nSpeed = 0.00015; npc.mesh.scale.set(1.5, 0.1, 1.5); } 
             else { npc.mesh.scale.set(1, 1, 1); if (npc.boostTimer > 0) { npc.boostTimer--; nSpeed = 0.0019; } }
@@ -1207,7 +1199,7 @@ function animate() {
         }
         let p = Math.max(0, npc.progress);
         let segment = Math.floor(p * NODE_COUNT); let segmentPercent = (p * NODE_COUNT) % 1;
-        let startNode = npcPathNodes[segment % NODE_COUNT]; let endNode = npcPathNodes[(segment + 1) % NODE_COUNT];
+        let startNode = npcPathNodes[segment % NODE_COUNT]; let endNode = npcPathNodes[(segment + 3) % NODE_COUNT];
         npc.mesh.position.set(startNode.x + (endNode.x - startNode.x) * segmentPercent, 0, startNode.z + (endNode.z - startNode.z) * segmentPercent + ((index%2===0)?5:-5));
         if(npc.isMega > 0) { npc.isMega--; npc.mesh.scale.set(2.3, 2.3, 2.3); }
         npc.mesh.lookAt(endNode.x, 0, endNode.z);
