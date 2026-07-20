@@ -1171,26 +1171,25 @@ function animate() {
 
     if (playerHitInvincibleTimer > 0) playerHitInvincibleTimer--;
 
-    // ============================================================
-    // 📷 カメラ制御（Zキーで反転）
-    // ============================================================
-    const camDist = 18;
-    const camHeight = 8;
-    const target = carGroup.position.clone();
+// ============================================================
+// 📷 カメラ制御（Zキー反転対応・確実版）
+// ============================================================
+const camDist = 18;
+const camHeight = 8;
 
-    if (cameraFlipped) {
-        // 後方視点（車の前から後ろを見る）
-        const forward = new THREE.Vector3(-Math.sin(carGroup.rotation.y), 0, -Math.cos(carGroup.rotation.y));
-        camera.position.copy(target).addScaledVector(forward, camDist);
-        camera.position.y = camHeight;
-        camera.lookAt(target.x, 0, target.z);
-    } else {
-        // ノーマル視点（後ろ上から）
-        const behind = new THREE.Vector3(Math.sin(carGroup.rotation.y), 0, Math.cos(carGroup.rotation.y));
-        camera.position.copy(target).addScaledVector(behind, camDist);
-        camera.position.y = camHeight;
-        camera.lookAt(target.x, 0, target.z);
-    }
+if (cameraFlipped) {
+    // 後方視点
+    camera.position.x = carPos.x + Math.sin(carGroup.rotation.y) * camDist;
+    camera.position.z = carPos.z + Math.cos(carGroup.rotation.y) * camDist;
+    camera.position.y = camHeight;
+    camera.lookAt(carPos.x, 0, carPos.z);
+} else {
+    // ノーマル視点
+    camera.position.x = carPos.x - Math.sin(carGroup.rotation.y) * camDist;
+    camera.position.z = carPos.z - Math.cos(carGroup.rotation.y) * camDist;
+    camera.position.y = camHeight;
+    camera.lookAt(carPos.x, 0, carPos.z);
+}
 
     let inEntryZone = (carPos.x > -entryZoneGeo.parameters.width/2 && carPos.x < entryZoneGeo.parameters.width/2 && carPos.z > 80 && carPos.z < 140);
 
