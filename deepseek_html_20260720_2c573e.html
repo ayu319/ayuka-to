@@ -370,6 +370,8 @@ let poleSpinTimer = 0; let jumpRotX = 0; let jumpRotZ = 0;
 let playerHitInvincibleTimer = 0; 
 let coins = 0;
 let playerProgress = 0;
+// Zキーカメラ反転フラグ
+let cameraFlipped = false;
 
 const itemTypes = ["キノコ", "緑甲羅", "赤甲羅", "サンダー", "デカキノコ", "金キノコ", "スター", "テレサ"];
 let heldItems = [null, null];
@@ -383,7 +385,7 @@ let bulletProgress = 0;
 let isItemShielding = false;
 let shieldShellMesh = null;
 
-const keys = { w: false, a: false, s: false, d: false, v: false, e: false, " ": false, shift: false, j: false };
+const keys = { w: false, a: false, s: false, d: false, v: false, e: false, " ": false, shift: false, j: false, z: false };
 carGroup.position.set(0, 0, 130);
 
 function getEmojiForItem(itemType) {
@@ -977,6 +979,26 @@ scene.add(coinGroup);
 // ⌨️ キーボードイベント
 // ============================================================
 window.addEventListener('keydown', (e) => { 
+        // Zキーでカメラ反転
+    if (k === "z" && !keys.z) {
+        keys.z = true;
+        cameraFlipped = !cameraFlipped;
+        if (audioCtx) {
+            try {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.frequency.value = cameraFlipped ? 880 : 660;
+                gain.gain.value = 0.08;
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.08);
+            } catch(e) {}
+        }
+        document.getElementById("status-text").innerText = cameraFlipped ? "🔴 後方視点" : "🔵 ノーマル視点";
+        e.preventDefault();
+        return;
+    }
     let k = e.key.toLowerCase(); if (k === "shift") k = "shift";
     
     if (e.key === " " && !keys[" "]) {
@@ -1011,6 +1033,11 @@ window.addEventListener('keydown', (e) => {
 });
 
 window.addEventListener('keyup', (e) => { 
+        if (k === "z") {
+        keys.z = false;
+        e.preventDefault();
+        return;
+    }
     let k = e.key.toLowerCase(); if (k === "shift") k = "shift";
     if (e.key === " ") { 
         keys[" "] = false; 
@@ -1224,12 +1251,26 @@ function animate() {
 
     if (playerHitInvincibleTimer > 0) playerHitInvincibleTimer--;
 
-    let camOffsetX = isDrifting ? -driftDir * 5.0 : 0;
-    let relativeCameraOffset = keys.s ? new THREE.Vector3(camOffsetX, 6.0, -15) : new THREE.Vector3(camOffsetX, 6.0, 15);
-    const targetCameraOffset = relativeCameraOffset.applyMatrix4(carGroup.matrixWorld);
-    currentCameraPos.lerp(targetCameraOffset, 0.08); camera.position.copy(currentCameraPos);
-    camera.lookAt(new THREE.Vector3(carPos.x, carPos.y + 1.2, carPos.z));
+    // ============================================================
+    // 📷 カメラ制御（Zキーで反転）
+    // ============================================================
+    const camDist = 30;
+    const camHeight = 20;
+    const target = carGroup.position.clone();
 
+    if (cameraFlipped) {
+        // 後方視点（車の前から後ろを見る）
+        const forward = new THREE.Vector3(-Math.sin(carGroup.rotation.y), 0, -Math.cos(carGroup.rotation.y));
+        camera.position.copy(target).addScaledVector(forward, camDist);
+        camera.position.y = camHeight;
+        camera.lookAt(target.x, 0, target.z);
+    } else {
+        // ノーマル視点（後ろ上から）
+        const behind = new THREE.Vector3(Math.sin(carGroup.rotation.y), 0, Math.cos(carGroup.rotation.y));
+        camera.position.copy(target).addScaledVector(behind, camDist);
+        camera.position.y = camHeight;
+        camera.lookAt(target.x, 0, target.z);
+    }
     let inEntryZone = (carPos.x > -entryZoneGeo.parameters.width/2 && carPos.x < entryZoneGeo.parameters.width/2 && carPos.z > 80 && carPos.z < 140);
 
     if (raceState === 0) {
