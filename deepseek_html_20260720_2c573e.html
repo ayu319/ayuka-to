@@ -1,8 +1,9 @@
+
 <!DOCTYPE html>
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>キノピオファクトリー：NPC知能改善版</title>
+    <title>キノピオファクトリー：Zカメラ反転完成版</title>
     <style>
         body { margin: 0; overflow: hidden; background: #000; font-family: sans-serif; }
         #ui-container {
@@ -37,6 +38,14 @@
             max-height: 200px; overflow-y: auto; width: 300px;
             font-family: monospace;
         }
+        #camera-hint {
+            position: absolute; top: 80px; right: 20px;
+            color: #fff; font-size: 18px; z-index: 10;
+            background: rgba(0,0,0,0.7); padding: 12px 20px;
+            border-radius: 8px;
+            border: 2px solid #ffeb3b;
+            pointer-events: none;
+        }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
@@ -53,6 +62,7 @@
     <div id="countdown"></div>
     <div id="turbo-ui"></div>
     <div id="npc-status">NPCステータス:</div>
+    <div id="camera-hint">📷 Zキーでカメラ反転</div>
     <div id="audio-hint">※画面をクリックすると音が有効になります</div>
 
 <script>
@@ -257,7 +267,7 @@ const sparkLeft = new THREE.Mesh(new THREE.SphereGeometry(0.45, 8, 8), new THREE
 const sparkRight = new THREE.Mesh(new THREE.SphereGeometry(0.45, 8, 8), new THREE.MeshBasicMaterial({color: 0xff4500, visible: false})); sparkRight.position.set(1.3, 0.2, 1.5); carGroup.add(sparkRight);
 
 // ============================================================
-// 🧠 NPC拡張データ（知能改善版）
+// 🧠 NPC拡張データ
 // ============================================================
 const NPC_STATE = {
     NORMAL: 'normal',
@@ -287,19 +297,17 @@ for (let i = 0; i < 11; i++) {
         boostTimer: 0,
         driftCharge: 0,
         lastAngle: null,
-        // ===== 追加: NPC知能用 =====
         state: NPC_STATE.NORMAL,
-        targetOffset: 0,          // 横位置オフセット
+        targetOffset: 0,
         avoidTimer: 0,
         blockTimer: 0,
         slipstreamTimer: 0,
         overtakeTimer: 0,
         thinkTimer: 0,
-        personality: Math.random(), // 0-1 個性
-        aggression: 0.3 + Math.random() * 0.5, // 攻撃性
-        skill: 0.6 + Math.random() * 0.4,      // スキル
+        personality: Math.random(),
+        aggression: 0.3 + Math.random() * 0.5,
+        skill: 0.6 + Math.random() * 0.4,
         lastStateChange: 0,
-        // 前方障害物検出用
         frontObstacle: null,
         frontObstacleDist: Infinity
     };
@@ -370,8 +378,7 @@ let poleSpinTimer = 0; let jumpRotX = 0; let jumpRotZ = 0;
 let playerHitInvincibleTimer = 0; 
 let coins = 0;
 let playerProgress = 0;
-// Zキーカメラ反転フラグ
-let cameraFlipped = false;
+let cameraFlipped = false; // Zキーカメラ反転フラグ
 
 const itemTypes = ["キノコ", "緑甲羅", "赤甲羅", "サンダー", "デカキノコ", "金キノコ", "スター", "テレサ"];
 let heldItems = [null, null];
@@ -482,9 +489,6 @@ function getPlayerRank() {
     return myRank;
 }
 
-// ============================================================
-// 🧠 NPCの順位を計算（自分自身の順位取得用）
-// ============================================================
 function getNpcRank(targetNpc) {
     let rank = 1;
     const targetProgress = targetNpc.lap + targetNpc.progress;
@@ -493,29 +497,23 @@ function getNpcRank(targetNpc) {
         const otherProgress = other.lap + other.progress;
         if (otherProgress > targetProgress) rank++;
     });
-    // プレイヤーも含める
     const playerProgressVal = playerLap + playerProgress;
     if (playerProgressVal > targetProgress) rank++;
     return rank;
 }
 
-// ============================================================
-// 🧠 NPCの前方障害物を検出（知能改善コア機能）
-// ============================================================
 function detectNpcObstacles(npc) {
     const lookAhead = 25;
     const px = npc.mesh.position.x;
     const pz = npc.mesh.position.z;
     const angle = npc.mesh.rotation.y;
     
-    // 前方の座標
     const frontX = px + Math.sin(angle) * lookAhead;
     const frontZ = pz + Math.cos(angle) * lookAhead;
     
     npc.frontObstacle = null;
     npc.frontObstacleDist = Infinity;
     
-    // 1. 工場の壁チェック
     if (frontX > RIGHT_WALL_X - 6 && frontX < RIGHT_WALL_X + 6 && frontZ > -150 && frontZ < 50) {
         npc.frontObstacle = 'wall_right';
         npc.frontObstacleDist = Math.abs(frontX - RIGHT_WALL_X);
@@ -527,7 +525,6 @@ function detectNpcObstacles(npc) {
         return;
     }
     
-    // 2. ポールチェック
     const poleDist1 = Math.sqrt(Math.pow(frontX - pole1Group.position.x, 2) + Math.pow(frontZ - pole1Group.position.z, 2));
     const poleDist2 = Math.sqrt(Math.pow(frontX - pole2Group.position.x, 2) + Math.pow(frontZ - pole2Group.position.z, 2));
     if (poleDist1 < 12) {
@@ -541,28 +538,21 @@ function detectNpcObstacles(npc) {
         return;
     }
     
-    // 3. 水チェック（プールエリア）
     if (frontX > -80 && frontX < 330 && frontZ > -460 && frontZ < -340) {
-        // 橋の上かチェック
         const onBridge = (frontX > -25 && frontX < 25) || (frontX > 100 && frontX < 150) || (frontX > 225 && frontX < 275);
         if (!onBridge) {
             npc.frontObstacle = 'water';
-            npc.frontObstacleDist = Math.min(
-                Math.abs(frontZ + 340),
-                Math.abs(frontZ + 460)
-            );
+            npc.frontObstacleDist = Math.min(Math.abs(frontZ + 340), Math.abs(frontZ + 460));
             return;
         }
     }
     
-    // 4. 他のNPCチェック（前方にいるか）
     npcs.forEach(other => {
         if (other === npc) return;
         const dx = other.mesh.position.x - px;
         const dz = other.mesh.position.z - pz;
         const dist = Math.sqrt(dx*dx + dz*dz);
         if (dist > 20) return;
-        // 前方にあるか判定
         const angleToOther = Math.atan2(dx, dz);
         let angleDiff = angleToOther - angle;
         while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
@@ -574,9 +564,6 @@ function detectNpcObstacles(npc) {
     });
 }
 
-// ============================================================
-// 🧠 NPCの状態更新（知能改善コア関数）
-// ============================================================
 function updateNpcState(npc) {
     if (npc.isSquished > 0 || npc.isStar > 0) {
         npc.state = NPC_STATE.NORMAL;
@@ -584,38 +571,29 @@ function updateNpcState(npc) {
     }
     
     const rank = getNpcRank(npc);
-    const totalRacers = 12; // プレイヤー + 11NPC
     const isLeading = rank <= 3;
     const isTrailing = rank >= 9;
     
-    // 障害物検出
     detectNpcObstacles(npc);
     
-    // 思考タイマー（定期的に状態再評価）
     npc.thinkTimer = (npc.thinkTimer || 0) - 1;
     if (npc.thinkTimer <= 0) {
         npc.thinkTimer = 10 + Math.floor(Math.random() * 20);
         
-        // ---- 状態遷移ロジック ----
-        
-        // 1. 障害物回避（最優先）
         if (npc.frontObstacle && npc.frontObstacleDist < 12) {
             npc.state = NPC_STATE.AVOIDING;
             npc.avoidTimer = 20 + Math.floor(Math.random() * 20);
-            // 回避方向を決める
             const obs = npc.frontObstacle;
             if (obs === 'wall_right' || obs === 'pole1' || obs === 'pole2') {
                 npc.targetOffset = -6 - Math.random() * 4;
             } else if (obs === 'wall_left') {
                 npc.targetOffset = 6 + Math.random() * 4;
             } else if (obs === 'water') {
-                // 水は橋の方へ誘導
                 const px = npc.mesh.position.x;
                 const bridgeTargets = [0, 125, 250];
                 let nearest = bridgeTargets.reduce((a, b) => Math.abs(a - px) < Math.abs(b - px) ? a : b);
                 npc.targetOffset = (nearest - px) * 0.3;
             } else if (obs && obs.mesh) {
-                // 他のNPCの場合：左右どちらかに回避
                 const side = Math.random() > 0.5 ? 1 : -1;
                 npc.targetOffset = side * (5 + Math.random() * 3);
             }
@@ -623,7 +601,6 @@ function updateNpcState(npc) {
             return;
         }
         
-        // 2. スリップストリーム（前方に車がいる場合）
         if (npc.frontObstacle && npc.frontObstacle.mesh && npc.frontObstacleDist < 15) {
             npc.state = NPC_STATE.SLIPSTREAM;
             npc.slipstreamTimer = 20;
@@ -631,20 +608,16 @@ function updateNpcState(npc) {
             return;
         }
         
-        // 3. 追い抜き行動（中位〜下位で前方に車がいるとき）
         if (!isLeading && npc.frontObstacle && npc.frontObstacle.mesh && npc.frontObstacleDist < 12) {
             npc.state = NPC_STATE.OVERTAKING;
             npc.overtakeTimer = 30;
-            // 追い抜き方向を決める
             const side = Math.random() > 0.5 ? 1 : -1;
             npc.targetOffset = side * (6 + Math.random() * 3);
             npc.lastStateChange = 40;
             return;
         }
         
-        // 4. ブロック行動（上位で後ろに車がいる場合）
         if (isLeading && rank <= 5) {
-            // 後ろの車をチェック
             let behindNpc = null;
             let behindDist = Infinity;
             const px = npc.mesh.position.x;
@@ -661,14 +634,12 @@ function updateNpcState(npc) {
                 let angleDiff = angleToOther - angle;
                 while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
                 while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
-                // 後方判定
                 if (Math.abs(angleDiff) > 1.5 && dist < behindDist) {
                     behindNpc = other;
                     behindDist = dist;
                 }
             });
             
-            // プレイヤーもチェック
             const pdx = carGroup.position.x - px;
             const pdz = carGroup.position.z - pz;
             const pdist = Math.sqrt(pdx*pdx + pdz*pdz);
@@ -686,12 +657,10 @@ function updateNpcState(npc) {
             if (behindNpc && behindDist < 10 && Math.random() < npc.aggression * 0.5) {
                 npc.state = NPC_STATE.BLOCKING;
                 npc.blockTimer = 40 + Math.floor(Math.random() * 30);
-                // ブロック方向（後ろの車の進行方向をふさぐ）
                 if (behindNpc === 'player') {
                     const pdx2 = carGroup.position.x - px;
                     const pdz2 = carGroup.position.z - pz;
                     const pAngle2 = Math.atan2(pdx2, pdz2);
-                    // 後ろの車の横に移動してブロック
                     const blockSide = Math.sin(pAngle2 - angle) > 0 ? 1 : -1;
                     npc.targetOffset = -blockSide * 3;
                 } else if (behindNpc.mesh) {
@@ -706,34 +675,25 @@ function updateNpcState(npc) {
             }
         }
         
-        // 5. ブースト状態（アイテム使用時は別処理）
         if (npc.boostTimer > 0) {
             npc.state = NPC_STATE.BOOSTING;
             return;
         }
         
-        // 6. デフォルト：ノーマル
         npc.state = NPC_STATE.NORMAL;
         npc.targetOffset = 0;
     }
 }
 
-// ============================================================
-// 🧠 NPCのアイテム戦略（知能改善）
-// ============================================================
 function updateNpcItemStrategy(npc) {
     if (!npc.heldItem || npc.itemUseTimer > 0) return;
     
     const rank = getNpcRank(npc);
-    const totalRacers = 12;
     const isLeading = rank <= 3;
     const isTrailing = rank >= 9;
-    
-    // 前方に車がいるか
     const hasFrontCar = npc.frontObstacle && npc.frontObstacle.mesh;
     const frontDist = npc.frontObstacleDist || Infinity;
     
-    // 周りの車の数
     let nearbyCount = 0;
     npcs.forEach(other => {
         if (other === npc) return;
@@ -745,9 +705,7 @@ function updateNpcItemStrategy(npc) {
     
     switch(npc.heldItem) {
         case "キノコ":
-            // 前方に車がいる、または泥エリアにいる時に使用
             if (hasFrontCar && frontDist < 12) shouldUse = true;
-            // 泥エリアチェック（簡易）
             const px = npc.mesh.position.x;
             const pz = npc.mesh.position.z;
             const isOnDirt = !(px > -40 && px < 40 && pz > -150 && pz < 350) &&
@@ -756,22 +714,15 @@ function updateNpcItemStrategy(npc) {
             if (isOnDirt) shouldUse = true;
             if (Math.random() < 0.01 * npc.aggression) shouldUse = true;
             break;
-            
         case "金キノコ":
-            // 中位〜下位で即使用
             if (!isLeading) shouldUse = true;
             if (Math.random() < 0.02) shouldUse = true;
             break;
-            
         case "緑甲羅":
-            // 前方に車がいる時
             if (hasFrontCar && frontDist < 20) shouldUse = true;
             if (Math.random() < 0.015 * npc.aggression) shouldUse = true;
             break;
-            
         case "赤甲羅":
-            // 前方の車を狙う（特にプレイヤー優先）
-            // プレイヤーが前方にいるかチェック
             const pdx = carGroup.position.x - npc.mesh.position.x;
             const pdz = carGroup.position.z - npc.mesh.position.z;
             const pDist = Math.sqrt(pdx*pdx + pdz*pdz);
@@ -787,9 +738,7 @@ function updateNpcItemStrategy(npc) {
             }
             if (Math.random() < 0.01 * npc.aggression) shouldUse = true;
             break;
-            
         case "サンダー":
-            // 自分より上位が多い時、または混戦時
             let aheadCount = 0;
             npcs.forEach(other => {
                 if (other === npc) return;
@@ -799,25 +748,18 @@ function updateNpcItemStrategy(npc) {
             if (nearbyCount >= 4) shouldUse = true;
             if (Math.random() < 0.005 * npc.aggression) shouldUse = true;
             break;
-            
         case "デカキノコ":
-            // 中位以下で使用
             if (!isLeading || nearbyCount >= 3) shouldUse = true;
             if (Math.random() < 0.01) shouldUse = true;
             break;
-            
         case "スター":
-            // 混戦時または下位で使用
             if (nearbyCount >= 3 || isTrailing) shouldUse = true;
             if (Math.random() < 0.005 * npc.aggression) shouldUse = true;
             break;
-            
         case "テレサ":
-            // アイテムを奪いたい時（前方に車がいる時）
             if (hasFrontCar) shouldUse = true;
             if (Math.random() < 0.015) shouldUse = true;
             break;
-            
         default:
             if (Math.random() < 0.005) shouldUse = true;
     }
@@ -827,28 +769,22 @@ function updateNpcItemStrategy(npc) {
     }
 }
 
-// ============================================================
-// 🧠 NPCの移動更新（知能改善コア）
-// ============================================================
 function updateNpcMovement(npc, nSpeed) {
-    // 状態に応じた速度調整
     let speedMod = 1.0;
     
     switch(npc.state) {
         case NPC_STATE.AVOIDING:
-            speedMod = 0.85; // 回避中は少し減速
+            speedMod = 0.85;
             npc.avoidTimer--;
             if (npc.avoidTimer <= 0) {
                 npc.targetOffset *= 0.9;
                 if (Math.abs(npc.targetOffset) < 0.5) npc.targetOffset = 0;
             }
             break;
-            
         case NPC_STATE.SLIPSTREAM:
-            speedMod = 1.15; // スリップストリームで加速
+            speedMod = 1.15;
             npc.slipstreamTimer--;
             if (npc.slipstreamTimer <= 0) {
-                // 追い抜きに移行するか判断
                 if (npc.frontObstacle && npc.frontObstacle.mesh && npc.frontObstacleDist < 10) {
                     npc.state = NPC_STATE.OVERTAKING;
                     npc.overtakeTimer = 20;
@@ -857,7 +793,6 @@ function updateNpcMovement(npc, nSpeed) {
                 }
             }
             break;
-            
         case NPC_STATE.OVERTAKING:
             speedMod = 1.2;
             npc.overtakeTimer--;
@@ -866,36 +801,27 @@ function updateNpcMovement(npc, nSpeed) {
                 npc.targetOffset = 0;
             }
             break;
-            
         case NPC_STATE.BLOCKING:
-            speedMod = 0.9; // ブロック中は減速して後ろをふさぐ
+            speedMod = 0.9;
             npc.blockTimer--;
             if (npc.blockTimer <= 0) {
                 npc.state = NPC_STATE.NORMAL;
                 npc.targetOffset = 0;
             }
             break;
-            
         case NPC_STATE.BOOSTING:
             speedMod = 1.3;
             break;
-            
         default:
-            // ノーマル：徐々にオフセットを戻す
             npc.targetOffset *= 0.95;
             if (Math.abs(npc.targetOffset) < 0.1) npc.targetOffset = 0;
             break;
     }
     
-    // スキルによる速度補正（NPCによって速度にバラつき）
     const skillFactor = 0.85 + npc.skill * 0.3;
-    
     return nSpeed * speedMod * skillFactor;
 }
 
-// ============================================================
-// 🪙 アイテム関連関数（既存）
-// ============================================================
 function getRandomItemByRank(rank) {
     if (raceState !== 2) {
         return itemTypes[Math.floor(Math.random() * itemTypes.length)];
@@ -979,7 +905,9 @@ scene.add(coinGroup);
 // ⌨️ キーボードイベント
 // ============================================================
 window.addEventListener('keydown', (e) => { 
-        // Zキーでカメラ反転
+    let k = e.key.toLowerCase(); if (k === "shift") k = "shift";
+    
+    // Zキーでカメラ反転
     if (k === "z" && !keys.z) {
         keys.z = true;
         cameraFlipped = !cameraFlipped;
@@ -999,7 +927,6 @@ window.addEventListener('keydown', (e) => {
         e.preventDefault();
         return;
     }
-    let k = e.key.toLowerCase(); if (k === "shift") k = "shift";
     
     if (e.key === " " && !keys[" "]) {
         keys[" "] = true;
@@ -1033,12 +960,14 @@ window.addEventListener('keydown', (e) => {
 });
 
 window.addEventListener('keyup', (e) => { 
-        if (k === "z") {
+    let k = e.key.toLowerCase(); if (k === "shift") k = "shift";
+    
+    if (k === "z") {
         keys.z = false;
         e.preventDefault();
         return;
     }
-    let k = e.key.toLowerCase(); if (k === "shift") k = "shift";
+    
     if (e.key === " ") { 
         keys[" "] = false; 
         if (itemBulletTimer > 0) return; 
@@ -1188,9 +1117,6 @@ function useNpcItem(npc) {
     }
 }
 
-// ============================================================
-// 🏁 レース開始
-// ============================================================
 function startRaceGridPlacement() {
     initAudio(); 
     speed = 0; playerLap = 1; midCheckpointPassed = false; isFinished = false; isSquishedTimer = 0; carY = 0; jumpVelocity = 0; lastPlayerSegment = 0;
@@ -1216,11 +1142,9 @@ function startRaceGridPlacement() {
     
     carGroup.position.set(0, 0, 130); carGroup.rotation.set(0, 0, 0); currentCameraPos.set(0, 7, 170);
     
-    // NPCリセット（知能状態もリセット）
     npcs.forEach((npc, index) => {
         npc.lap = 1; npc.progress = -0.006 * (index + 1); npc.isSquished = 0; npc.isMega = 0; npc.isStar = 0; npc.heldItem = null; npc.itemUseTimer = 0; npc.boostTimer = 0;
         npc.mesh.scale.set(1,1,1); npc.mesh.position.set(((index % 2 === 0) ? 7 : -7), 0, 135 + (index * 9) + 15); npc.mesh.rotation.set(0, 0, 0);
-        // 知能状態リセット
         npc.state = NPC_STATE.NORMAL;
         npc.targetOffset = 0;
         npc.avoidTimer = 0;
@@ -1233,9 +1157,6 @@ function startRaceGridPlacement() {
     });
 }
 
-// ============================================================
-// 🎬 メインアニメーションループ
-// ============================================================
 const carPos = carGroup.position;
 
 function animate() {
@@ -1271,6 +1192,7 @@ function animate() {
         camera.position.y = camHeight;
         camera.lookAt(target.x, 0, target.z);
     }
+
     let inEntryZone = (carPos.x > -entryZoneGeo.parameters.width/2 && carPos.x < entryZoneGeo.parameters.width/2 && carPos.z > 80 && carPos.z < 140);
 
     if (raceState === 0) {
@@ -1738,24 +1660,17 @@ function animate() {
         }
     }
 
-    // ============================================================
-    // 🧠 NPC更新（知能改善版）
-    // ============================================================
+    // NPC更新
     npcs.forEach((npc, index) => {
         if (raceState === 2) { 
-            // 基本速度（プレイヤー速度に連動）
             let nSpeed = baseMaxSpeed / totalTrackLength;
             
-            // プレイヤーと比較して速度調整
             let playerProgressVal = playerLap + playerProgress;
             let npcProgressVal = npc.lap + npc.progress;
             let diff = playerProgressVal - npcProgressVal;
-            
-            // 差に応じて速度を調整（0.7〜1.3倍）
             let diffFactor = 1.0 + Math.max(-0.3, Math.min(0.3, diff * 0.5));
             nSpeed *= diffFactor;
             
-            // 被弾チェック
             if (npc.isSquished > 0) { 
                 npc.isSquished--; 
                 nSpeed = 0.00015; 
@@ -1768,14 +1683,10 @@ function animate() {
                 } 
             }
             
-            // ⭐ NPC知能：状態更新と速度調整
             updateNpcState(npc);
             nSpeed = updateNpcMovement(npc, nSpeed);
-            
-            // NPCアイテム戦略
             updateNpcItemStrategy(npc);
             
-            // スター状態のNPCとの衝突
             if (npc.isStar > 0) {
                 npc.isStar--;
                 if (npc.mesh.position.distanceTo(carGroup.position) < 7.0 && 
@@ -1792,7 +1703,6 @@ function animate() {
                 }
             }
             
-            // NPCの位置更新（オフセット適用）
             npc.progress += nSpeed; 
             if (npc.progress >= 1) { npc.progress -= 1; npc.lap++; }
             
@@ -1804,28 +1714,23 @@ function animate() {
             }
         }
         
-        // 位置計算
         let p = Math.max(0, npc.progress);
         let segment = Math.floor(p * NODE_COUNT); 
         let segmentPercent = (p * NODE_COUNT) % 1;
         let startNode = npcPathNodes[segment % NODE_COUNT]; 
         let endNode = npcPathNodes[(segment + 1) % NODE_COUNT];
         
-        // 基本位置
         let baseX = startNode.x + (endNode.x - startNode.x) * segmentPercent;
         let baseZ = startNode.z + (endNode.z - startNode.z) * segmentPercent;
         
-        // 横方向のオフセット（障害物回避・追い抜き用）
         let offsetX = 0;
         let offsetZ = 0;
         if (Math.abs(npc.targetOffset) > 0.1) {
-            // 進行方向に対して垂直なベクトルを計算
             const angle = Math.atan2(endNode.x - startNode.x, endNode.z - startNode.z);
             offsetX = -Math.cos(angle) * npc.targetOffset;
             offsetZ = Math.sin(angle) * npc.targetOffset;
         }
         
-        // インデックスによる初期オフセット（車線別）
         const laneOffset = ((index % 2 === 0) ? 5 : -5);
         
         npc.mesh.position.set(
@@ -1834,7 +1739,6 @@ function animate() {
             baseZ + offsetZ + ((index % 2 === 0) ? 5 : -5)
         );
         
-        // スター・メガ状態
         if(npc.isMega > 0) { 
             npc.isMega--; 
             npc.mesh.scale.set(2.3, 2.3, 2.3); 
@@ -1845,7 +1749,6 @@ function animate() {
         
         npc.mesh.lookAt(endNode.x, 0, endNode.z);
         
-        // スパーク表示（ブースト中またはスリップストリーム中）
         if (npc.boostTimer > 0 || npc.state === NPC_STATE.SLIPSTREAM || npc.state === NPC_STATE.BOOSTING) {
             npc.sparkLeft.visible = true;
             npc.sparkRight.visible = true;
@@ -1857,7 +1760,6 @@ function animate() {
         }
     });
     
-    // 🧠 NPCステータス表示（デバッグ用）
     if (raceState === 2) {
         let statusTextLines = "NPCステータス:\n";
         npcs.slice(0, 5).forEach((npc, i) => {
