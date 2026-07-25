@@ -1,14 +1,27 @@
+
 <!DOCTYPE html>
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>キノピオファクトリー：Zカメラ反転完成版</title>
+    <title>阿諛ゆんカート</title>
     <style>
         body { margin: 0; overflow: hidden; background: #000; font-family: sans-serif; }
         #ui-container {
             position: absolute; top: 20px; left: 20px; color: white; font-weight: bold;
             background: rgba(0,0,0,0.6); padding: 15px; border-radius: 8px; pointer-events: none;
             z-index: 10;
+        }
+        #rank-text { font-size: 32px; color: #ffeb3b; }
+        #lap-text { font-size: 20px; margin-top: 5px; }
+        #coin-text { font-size: 20px; color: #fff33f; margin-top: 5px; }
+        #status-text { font-size: 14px; color: #ffeb3b; margin-top: 5px; }
+        #warning-text {
+            font-size: 20px;
+            margin-top: 5px;
+            text-shadow: 0 0 15px currentColor;
+            font-weight: bold;
+            min-height: 30px;
+            transition: color 0.1s;
         }
         #countdown {
             position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%);
@@ -30,20 +43,19 @@
         #item-slot-1 { right: 130px; border-color: #ffeb3b; }
         #item-slot-2 { right: 20px; border-color: #a0a0a0; background: rgba(0,0,0,0.8); }
         #audio-hint { position: absolute; bottom: 10px; right: 10px; color: rgba(255,255,255,0.5); font-size: 12px; pointer-events: none; }
-        #npc-status {
-            position: absolute; bottom: 100px; left: 20px; color: #88ff88;
-            font-size: 14px; background: rgba(0,0,0,0.7); padding: 10px;
-            border-radius: 8px; pointer-events: none; z-index: 10;
-            max-height: 200px; overflow-y: auto; width: 300px;
-            font-family: monospace;
+        #charge-bar {
+            position: absolute; bottom: 100px; left: 50%; transform: translateX(-50%);
+            width: 200px; height: 20px; background: rgba(0,0,0,0.7); border: 2px solid #fff;
+            border-radius: 10px; overflow: hidden; display: none; z-index: 10;
         }
-        #camera-hint {
-            position: absolute; top: 80px; right: 20px;
-            color: #fff; font-size: 18px; z-index: 10;
-            background: rgba(0,0,0,0.7); padding: 12px 20px;
-            border-radius: 8px;
-            border: 2px solid #ffeb3b;
-            pointer-events: none;
+        #charge-fill {
+            width: 0%; height: 100%; background: linear-gradient(90deg, #ff4400, #ff8800, #ffff00);
+            transition: width 0.05s;
+        }
+        .triple-indicator {
+            position: absolute; bottom: 80px; left: 50%; transform: translateX(-50%);
+            display: flex; gap: 10px; font-size: 30px; z-index: 10;
+            background: rgba(0,0,0,0.5); padding: 5px 15px; border-radius: 10px;
         }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -51,18 +63,19 @@
 <body>
 
     <div id="ui-container">
-        <div id="rank-text" style="font-size: 32px; color: #ffeb3b;">順位: --</div>
-        <div id="lap-text" style="font-size: 20px; margin-top: 5px;">Lap: --</div>
-        <div id="coin-text" style="font-size: 20px; color: #fff33f; margin-top: 5px;">🪙 コイン: 0/10</div>
-        <div id="status-text" style="font-size: 14px; color: #ffeb3b; margin-top: 5px;">黄色のエリアへ向かおう！</div>
+        <div id="rank-text">順位: --</div>
+        <div id="lap-text">Lap: --</div>
+        <div id="coin-text">🪙 コイン: 0/10</div>
+        <div id="status-text">黄色のエリアへ向かおう！</div>
+        <div id="warning-text"></div>
     </div>
     <div id="item-slot-1" class="item-box-ui">ITEM 1<br>なし</div>
     <div id="item-slot-2" class="item-box-ui">ITEM 2<br>なし</div>
     <div id="countdown"></div>
     <div id="turbo-ui"></div>
-    <div id="npc-status">NPCステータス:</div>
-    <div id="camera-hint">📷 Zキーでカメラ反転</div>
+    <div id="charge-bar"><div id="charge-fill"></div></div>
     <div id="audio-hint">※画面をクリックすると音が有効になります</div>
+    <div class="triple-indicator" id="triple-indicator" style="display:none;"></div>
 
 <script>
 // --- 🔊 WEB AUDIO API ---
@@ -110,11 +123,27 @@ function soundHit() {
     playTone(120, 0.25, 'sawtooth', 0.25);
     playTone(90, 0.3, 'triangle', 0.3);
 }
+function soundBlueShell() {
+    playTone(200, 0.3, 'sawtooth', 0.2);
+    setTimeout(() => playTone(150, 0.4, 'sawtooth', 0.3), 100);
+}
+function soundFireball() {
+    playTone(800, 0.05, 'sawtooth', 0.08);
+    setTimeout(() => playTone(600, 0.04, 'sawtooth', 0.06), 20);
+}
+function soundBoomerangThrow() {
+    playTone(500, 0.08, 'sine', 0.12);
+    setTimeout(() => playTone(700, 0.06, 'sine', 0.08), 60);
+}
+function soundBomb() {
+    playTone(300, 0.15, 'sawtooth', 0.15);
+    setTimeout(() => playTone(200, 0.2, 'sawtooth', 0.2), 80);
+}
 
 function startBGM() {
     if (bgmInterval) clearInterval(bgmInterval);
     let step = 0;
-    const bassNodes = [110, 110, 130, 110, 146, 146, 165, 130]; 
+    const bassNodes = [110, 110, 130, 110, 146, 146, 165, 130];
     bgmInterval = setInterval(() => {
         if (raceState !== 2) { if(raceState === 3) clearInterval(bgmInterval); return; }
         let f = bassNodes[step % bassNodes.length];
@@ -126,6 +155,7 @@ function startBGM() {
         step++;
     }, 160);
 }
+
 
 // --- 🎮 3Dメインゲームシステム ---
 const scene = new THREE.Scene();
@@ -143,7 +173,7 @@ const dirLight = new THREE.DirectionalLight(0xfffcaa, 0.8); dirLight.position.se
 const floor = new THREE.Mesh(new THREE.PlaneGeometry(8000, 8000), new THREE.MeshStandardMaterial({ color: 0x2d2822 }));
 floor.rotation.x = -Math.PI / 2; scene.add(floor);
 
-// --- 🗺️ コースパーツ配置 ---
+// --- 🗺️ コースパーツ ---
 const TRACK_WIDTH = 80;
 const trackPieces = new THREE.Group();
 const roadMat = new THREE.MeshStandardMaterial({ color: 0x383840, roughness: 0.7 });
@@ -173,12 +203,12 @@ const entryZoneGeo = new THREE.PlaneGeometry(TRACK_WIDTH, 40);
 const entryZoneMat = new THREE.MeshBasicMaterial({ color: 0xffff00, transparent: true, opacity: 0.3, side: THREE.DoubleSide });
 const entryZone = new THREE.Mesh(entryZoneGeo, entryZoneMat);
 entryZone.rotation.x = -Math.PI / 2;
-entryZone.position.set(0, 0.05, 110); 
+entryZone.position.set(0, 0.05, 110);
 scene.add(entryZone);
 
 // --- 🏭 工場エリア ---
 const factoryGroup = new THREE.Group();
-const FACTORY_WIDTH = 50; 
+const FACTORY_WIDTH = 50;
 const insideFloor = new THREE.Mesh(new THREE.PlaneGeometry(FACTORY_WIDTH, 200), new THREE.MeshStandardMaterial({ color: 0x1c1c22 }));
 insideFloor.rotation.x = -Math.PI / 2; insideFloor.position.set(0, 0.04, -50); factoryGroup.add(insideFloor);
 const roof = new THREE.Mesh(new THREE.BoxGeometry(FACTORY_WIDTH, 3, 200), new THREE.MeshStandardMaterial({ color: 0x15151a }));
@@ -191,37 +221,36 @@ const leftWall = new THREE.Mesh(new THREE.BoxGeometry(4, 50, 200), wallMat); lef
 const alertLight = new THREE.PointLight(0xff0000, 1.5, 150); alertLight.position.set(0, 45, -50); factoryGroup.add(alertLight);
 scene.add(factoryGroup);
 
-// --- 🚧 工場裏のダートポール ---
-const poleGeometry = new THREE.CylinderGeometry(3.5, 3.5, 70, 16); 
+// --- 🚧 ダートポール ---
+const poleGeometry = new THREE.CylinderGeometry(3.5, 3.5, 70, 16);
 const poleMaterial = new THREE.MeshStandardMaterial({ color: 0xeeeeee, roughness: 0.4 });
 
 const pole1Group = new THREE.Group();
-pole1Group.position.set(12, 0, -250); 
+pole1Group.position.set(12, 0, -250);
 const pole1Mesh = new THREE.Mesh(poleGeometry, poleMaterial);
 pole1Mesh.position.y = 35;
 pole1Group.add(pole1Mesh);
-
 for(let h=5; h<=65; h+=10) {
     const blueMat = new THREE.MeshStandardMaterial({ color: 0x0055ff, roughness: 0.4 });
     const ring = new THREE.Mesh(new THREE.CylinderGeometry(3.7, 3.7, 5, 16), blueMat);
-    ring.position.y = h - 35; 
+    ring.position.y = h - 35;
     pole1Mesh.add(ring);
 }
 scene.add(pole1Group);
 
 const pole2Group = new THREE.Group();
-pole2Group.position.set(-12, 0, -250); 
+pole2Group.position.set(-12, 0, -250);
 const pole2Mesh = new THREE.Mesh(poleGeometry, poleMaterial);
 pole2Mesh.position.y = 35;
 pole2Group.add(pole2Mesh);
-
 for(let h=5; h<=65; h+=10) {
     const blueMat = new THREE.MeshStandardMaterial({ color: 0x0055ff, roughness: 0.4 });
     const ring = new THREE.Mesh(new THREE.CylinderGeometry(3.7, 3.7, 5, 16), blueMat);
-    ring.position.y = h - 35; 
+    ring.position.y = h - 35;
     pole2Mesh.add(ring);
 }
 scene.add(pole2Group);
+
 
 // ギミック
 const gearGroup = new THREE.Group(); gearGroup.position.set(-140, 55, -80);
@@ -255,81 +284,30 @@ const smallRampMat = new THREE.MeshStandardMaterial({ color: 0xff8800, roughness
 const smallRamp1 = new THREE.Mesh(new THREE.BoxGeometry(20, 2.5, 30), smallRampMat); smallRamp1.position.set(20, -0.2, -400); smallRamp1.rotation.z = 0.2; scene.add(smallRamp1);
 const smallRamp2 = new THREE.Mesh(new THREE.BoxGeometry(20, 2.5, 30), smallRampMat); smallRamp2.position.set(145, -0.2, -400); smallRamp2.rotation.z = 0.2; scene.add(smallRamp2);
 
+
 // プレイヤーカート
 const carGroup = new THREE.Group();
-const carModel = new THREE.Mesh(new THREE.BoxGeometry(2.4, 1, 3.4), new THREE.MeshStandardMaterial({ color: 0xffd700 })); 
-carModel.position.y = 0.5; 
+const carModel = new THREE.Mesh(new THREE.BoxGeometry(2.4, 1, 3.4), new THREE.MeshStandardMaterial({ color: 0xffd700 }));
+carModel.position.y = 0.5;
 carGroup.add(carModel);
 scene.add(carGroup);
 
 const sparkLeft = new THREE.Mesh(new THREE.SphereGeometry(0.45, 8, 8), new THREE.MeshBasicMaterial({color: 0xff4500, visible: false})); sparkLeft.position.set(-1.3, 0.2, 1.5); carGroup.add(sparkLeft);
 const sparkRight = new THREE.Mesh(new THREE.SphereGeometry(0.45, 8, 8), new THREE.MeshBasicMaterial({color: 0xff4500, visible: false})); sparkRight.position.set(1.3, 0.2, 1.5); carGroup.add(sparkRight);
 
-// ============================================================
-// 🧠 NPC拡張データ
-// ============================================================
-const NPC_STATE = {
-    NORMAL: 'normal',
-    OVERTAKING: 'overtaking',
-    AVOIDING: 'avoiding',
-    BLOCKING: 'blocking',
-    BOOSTING: 'boosting',
-    SLIPSTREAM: 'slipstream'
-};
-
+// NPCライバル
 const npcColors = [0xff3333, 0x3333ff, 0x33ff33, 0xff33ff, 0xffff33, 0x33ffff, 0xffa500, 0x8a2be2, 0x00ff00, 0xff66b4, 0x777777];
 const npcs = [];
-
-// NPC初期化
 for (let i = 0; i < 11; i++) {
-    const npc = {
-        color: npcColors[i],
-        mesh: new THREE.Group(),
-        progress: 0,
-        lap: 1,
-        isSquished: 0,
-        isMega: 0,
-        isStar: 0,
-        isBoo: 0,
-        heldItem: null,
-        itemUseTimer: 0,
-        boostTimer: 0,
-        driftCharge: 0,
-        lastAngle: null,
-        state: NPC_STATE.NORMAL,
-        targetOffset: 0,
-        avoidTimer: 0,
-        blockTimer: 0,
-        slipstreamTimer: 0,
-        overtakeTimer: 0,
-        thinkTimer: 0,
-        personality: Math.random(),
-        aggression: 0.3 + Math.random() * 0.5,
-        skill: 0.6 + Math.random() * 0.4,
-        lastStateChange: 0,
-        frontObstacle: null,
-        frontObstacleDist: Infinity
-    };
-    
-    const chassis = new THREE.Mesh(new THREE.BoxGeometry(2.4, 1, 3.4), new THREE.MeshStandardMaterial({ color: npcColors[i] }));
-    chassis.position.y = 0.5;
-    npc.mesh.add(chassis);
-    scene.add(npc.mesh);
-    npc.chassis = chassis;
-    
-    const nSparkL = new THREE.Mesh(new THREE.SphereGeometry(0.35, 8, 8), new THREE.MeshBasicMaterial({ color: 0xff3333, visible: false }));
-    nSparkL.position.set(-1.3, 0.2, 1.5);
-    npc.mesh.add(nSparkL);
-    const nSparkR = new THREE.Mesh(new THREE.SphereGeometry(0.35, 8, 8), new THREE.MeshBasicMaterial({ color: 0xff3333, visible: false }));
-    nSparkR.position.set(1.3, 0.2, 1.5);
-    npc.mesh.add(nSparkR);
-    npc.sparkLeft = nSparkL;
-    npc.sparkRight = nSparkR;
-    
-    npcs.push(npc);
+    npcs.push({ color: npcColors[i], mesh: new THREE.Group(), progress: 0, lap: 1, isSquished: 0, isMega: 0, isStar: 0, heldItem: null, itemUseTimer: 0, boostTimer: 0, driftCharge: 0, lastAngle: null });
+    const chassis = new THREE.Mesh(new THREE.BoxGeometry(2.4, 1, 3.4), new THREE.MeshStandardMaterial({ color: npcColors[i] })); chassis.position.y = 0.5; npcs[i].mesh.add(chassis); scene.add(npcs[i].mesh);
+    npcs[i].chassis = chassis;
+    const nSparkL = new THREE.Mesh(new THREE.SphereGeometry(0.35, 8, 8), new THREE.MeshBasicMaterial({ color: 0xff3333, visible: false })); nSparkL.position.set(-1.3, 0.2, 1.5); npcs[i].mesh.add(nSparkL);
+    const nSparkR = new THREE.Mesh(new THREE.SphereGeometry(0.35, 8, 8), new THREE.MeshBasicMaterial({ color: 0xff3333, visible: false })); nSparkR.position.set(1.3, 0.2, 1.5); npcs[i].mesh.add(nSparkR);
+    npcs[i].sparkLeft = nSparkL; npcs[i].sparkRight = nSparkR;
 }
 
-// アイテムボックス
+// --- 📦 アイテムボックス配置 ---
 const itemBoxes = [];
 const boxGeometry = new THREE.BoxGeometry(4, 4, 4);
 const boxMaterial = new THREE.MeshBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 0.6 });
@@ -351,45 +329,80 @@ addRowOfBoxes(318, -250, 382, -250, 5);
 addRowOfBoxes(100, 218, 100, 282, 5);
 
 itemBoxPositions.forEach(pos => {
-    const box = new THREE.Mesh(boxGeometry, boxMaterial);
-    box.position.set(pos.x, 2, pos.z);
-    scene.add(box);
+    const box = new THREE.Mesh(boxGeometry, boxMaterial); box.position.set(pos.x, 2, pos.z); scene.add(box);
     itemBoxes.push({ mesh: box, respawnTimer: 0 });
 });
 
 const shells = [];
 const droppedItems = [];
+const explosions = [];
 
-// --- 変数 ---
-let speed = 0; let baseMaxSpeed = 2.1; 
+// --- 🔥 ファイヤーフラワー用 ---
+let fireFlowerAmmo = 0;
+let fireballCooldown = 0;
+const fireballs = [];
+
+// --- 🪃 ブーメラン用 ---
+let boomerangActive = false;
+let boomerangTotalReturns = 0;
+const boomerangs = [];
+
+// --- 💣 ボム兵用 ---
+const bombs = [];
+let bombChargeTime = 0;
+let isChargingBomb = false;
+let bombChargeMax = 90;
+
+// --- 3連アイテム用 ---
+let tripleItemCount = 0;
+let tripleItemType = null;
+let tripleItemSprites = [];
+let tripleItemAngle = 0;
+let tripleItemInSlot1 = false;
+
+// 変数
+let speed = 0; let baseMaxSpeed = 2.1;
 let playerLap = 1; let midCheckpointPassed = false; let isFinished = false;
 let isDrifting = false; let driftDir = 0; let driftCharge = 0; let turboState = 0; let turboTimer = 0; let isSquishedTimer = 0;
 let carY = 0; let jumpVelocity = 0; let hasJumpActioned = false; let jumpActionTimer = 0;
 let pendingChargeTurbo = 0; let pendingChargeSpeed = 0; let pendingChargeMsg = ""; let pendingChargeColor = "#00ff00";
-let raceState = 0; 
+let raceState = 0;
 let countdownTime = 0; let rocketTimer = 0; let rocketFailed = false;
 let currentCameraPos = new THREE.Vector3(0, 7, 180); let jumpChargeTime = 0;
-let isWallRiding = false; wallRideSide = 0; wallKickVelocityX = 0; wallKickIgnoreTimer = 0; 
+let isWallRiding = false; wallRideSide = 0; wallKickVelocityX = 0; wallKickIgnoreTimer = 0;
+
 let centerUiTimer = 0; let lastCenterText = "";
 let lastSecondsInt = -1;
-let wallKickCount = 0; let jumpActionCount = 0;
-let poleSpinTimer = 0; let jumpRotX = 0; let jumpRotZ = 0;
-let playerHitInvincibleTimer = 0; 
+
+let wallKickCount = 0;
+let jumpActionCount = 0;
+let poleSpinTimer = 0;
+let jumpRotX = 0; let jumpRotZ = 0;
+
+let playerHitInvincibleTimer = 0;
+
 let coins = 0;
 let playerProgress = 0;
-let cameraFlipped = false; // Zキーカメラ反転フラグ
 
-const itemTypes = ["キノコ", "緑甲羅", "赤甲羅", "サンダー", "デカキノコ", "金キノコ", "スター", "テレサ"];
+let cameraFlipped = false;
+let cameraFlipTarget = 0;
+let cameraFlipCurrent = 0;
+
+// アイテム管理
+const itemTypes = ["キノコ", "緑甲羅", "赤甲羅", "サンダー", "デカキノコ", "金キノコ", "スター", "青甲羅", "ファイヤーフラワー", "ブーメラン", "ボム兵", "キノコ3", "緑甲羅3", "赤甲羅3"];
 let heldItems = [null, null];
 let isItemRoulette = false;
-let rouletteSlot = -1; 
+let rouletteSlot = -1;
 let rouletteTimer = 0;
 let itemMushroomTimer = 0; let itemMegaTimer = 0; let itemGoldenTimer = 0; let itemStarTimer = 0;
-let itemBooTimer = 0;
 let itemBulletTimer = 0;
 let bulletProgress = 0;
 let isItemShielding = false;
 let shieldShellMesh = null;
+
+let warningTimer = 0;
+let warningMessage = "";
+let warningColor = "#ff3333";
 
 const keys = { w: false, a: false, s: false, d: false, v: false, e: false, " ": false, shift: false, j: false, z: false };
 carGroup.position.set(0, 0, 130);
@@ -400,21 +413,37 @@ function getEmojiForItem(itemType) {
         case "金キノコ": return "🌟";
         case "緑甲羅": return "🟢";
         case "赤甲羅": return "🔴";
+        case "青甲羅": return "💙";
         case "サンダー": return "⚡";
         case "デカキノコ": return "🍄";
         case "スター": return "⭐";
         case "コイン": return "🪙";
-        case "テレサ": return "👻";
         case "キラー": return "🚀";
+        case "ファイヤーフラワー": return "🔥";
+        case "ブーメラン": return "🪃";
+        case "ボム兵": return "💣";
+        case "キノコ3": return "🍄🍄🍄";
+        case "緑甲羅3": return "🟢🟢🟢";
+        case "赤甲羅3": return "🔴🔴🔴";
         default: return "❓";
     }
 }
 
-// --- コースノード ---
+function getTripleEmoji(itemType) {
+    if (itemType === "キノコ3") return "🍄";
+    if (itemType === "緑甲羅3") return "🟢";
+    if (itemType === "赤甲羅3") return "🔴";
+    return "❓";
+}
+
+function isTripleItem(item) {
+    return item === "キノコ3" || item === "緑甲羅3" || item === "赤甲羅3";
+}
+
+// 📐 コース進捗
 const npcPathNodes = [
-    {x: 0, z: 300}, {x: 0, z: 0}, {x: 0, z: -200}, {x: -300, z: -200}, {x: -300, z: -400}, 
-    {x: -100, z: -400}, {x: -90, z: -400}, {x: 0, z: -400}, {x: 125, z: -400}, {x: 250, z: -400}, 
-    {x: 350, z: -400}, {x: 350, z: -100}, {x: 200, z: -100}, {x: 200, z: 250}, {x: 0, z: 250}     
+    {x: 0, z: 300}, {x: 0, z: 0}, {x: 0, z: -200}, {x: -300, z: -200}, {x: -300, z: -400}, {x: -100, z: -400}, {x: -90, z: -400},
+    {x: 0, z: -400}, {x: 125, z: -400}, {x: 250, z: -400}, {x: 350, z: -400}, {x: 350, z: -100}, {x: 200, z: -100}, {x: 200, z: 250}, {x: 0, z: 250}
 ];
 const NODE_COUNT = npcPathNodes.length;
 
@@ -437,21 +466,18 @@ function initTrackLengths() {
 initTrackLengths();
 
 let lastPlayerSegment = 0;
-
 function calculatePlayerProgress() {
     let bestDist = Infinity;
     let bestProgress = 0;
     let bestSegment = lastPlayerSegment;
     const px = carGroup.position.x;
     const pz = carGroup.position.z;
-
     const WINDOW = 7;
     for (let offset = -WINDOW; offset <= WINDOW; offset++) {
         let i = ((lastPlayerSegment + offset) % NODE_COUNT + NODE_COUNT) % NODE_COUNT;
         let p1 = npcPathNodes[i];
         let p2 = npcPathNodes[(i + 1) % NODE_COUNT];
         let len = segmentLengths[i];
-
         let t = 0;
         if (len > 0) {
             t = ((px - p1.x) * (p2.x - p1.x) + (pz - p1.z) * (p2.z - p1.z)) / (len * len);
@@ -460,7 +486,6 @@ function calculatePlayerProgress() {
         let projX = p1.x + t * (p2.x - p1.x);
         let projZ = p1.z + t * (p2.z - p1.z);
         let dist = Math.sqrt((px - projX)**2 + (pz - projZ)**2);
-
         if (dist < bestDist) {
             bestDist = dist;
             bestSegment = i;
@@ -478,7 +503,6 @@ function getPlayerRank() {
     let myRank = 1;
     playerProgress = (itemBulletTimer > 0) ? bulletProgress : calculatePlayerProgress();
     let playerProgressVal = playerLap + playerProgress;
-    
     npcs.forEach(npc => {
         let npcProgressVal = npc.lap + npc.progress;
         if (npcProgressVal > playerProgressVal) {
@@ -488,351 +512,17 @@ function getPlayerRank() {
     return myRank;
 }
 
-function getNpcRank(targetNpc) {
-    let rank = 1;
-    const targetProgress = targetNpc.lap + targetNpc.progress;
-    npcs.forEach(other => {
-        if (other === targetNpc) return;
-        const otherProgress = other.lap + other.progress;
-        if (otherProgress > targetProgress) rank++;
-    });
-    const playerProgressVal = playerLap + playerProgress;
-    if (playerProgressVal > targetProgress) rank++;
-    return rank;
-}
-
-function detectNpcObstacles(npc) {
-    const lookAhead = 25;
-    const px = npc.mesh.position.x;
-    const pz = npc.mesh.position.z;
-    const angle = npc.mesh.rotation.y;
-    
-    const frontX = px + Math.sin(angle) * lookAhead;
-    const frontZ = pz + Math.cos(angle) * lookAhead;
-    
-    npc.frontObstacle = null;
-    npc.frontObstacleDist = Infinity;
-    
-    if (frontX > RIGHT_WALL_X - 6 && frontX < RIGHT_WALL_X + 6 && frontZ > -150 && frontZ < 50) {
-        npc.frontObstacle = 'wall_right';
-        npc.frontObstacleDist = Math.abs(frontX - RIGHT_WALL_X);
-        return;
-    }
-    if (frontX > LEFT_WALL_X - 6 && frontX < LEFT_WALL_X + 6 && frontZ > -150 && frontZ < 50) {
-        npc.frontObstacle = 'wall_left';
-        npc.frontObstacleDist = Math.abs(frontX - LEFT_WALL_X);
-        return;
-    }
-    
-    const poleDist1 = Math.sqrt(Math.pow(frontX - pole1Group.position.x, 2) + Math.pow(frontZ - pole1Group.position.z, 2));
-    const poleDist2 = Math.sqrt(Math.pow(frontX - pole2Group.position.x, 2) + Math.pow(frontZ - pole2Group.position.z, 2));
-    if (poleDist1 < 12) {
-        npc.frontObstacle = 'pole1';
-        npc.frontObstacleDist = poleDist1;
-        return;
-    }
-    if (poleDist2 < 12) {
-        npc.frontObstacle = 'pole2';
-        npc.frontObstacleDist = poleDist2;
-        return;
-    }
-    
-    if (frontX > -80 && frontX < 330 && frontZ > -460 && frontZ < -340) {
-        const onBridge = (frontX > -25 && frontX < 25) || (frontX > 100 && frontX < 150) || (frontX > 225 && frontX < 275);
-        if (!onBridge) {
-            npc.frontObstacle = 'water';
-            npc.frontObstacleDist = Math.min(Math.abs(frontZ + 340), Math.abs(frontZ + 460));
-            return;
-        }
-    }
-    
-    npcs.forEach(other => {
-        if (other === npc) return;
-        const dx = other.mesh.position.x - px;
-        const dz = other.mesh.position.z - pz;
-        const dist = Math.sqrt(dx*dx + dz*dz);
-        if (dist > 20) return;
-        const angleToOther = Math.atan2(dx, dz);
-        let angleDiff = angleToOther - angle;
-        while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
-        while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
-        if (Math.abs(angleDiff) < 0.8 && dist < npc.frontObstacleDist) {
-            npc.frontObstacle = other;
-            npc.frontObstacleDist = dist;
-        }
-    });
-}
-
-function updateNpcState(npc) {
-    if (npc.isSquished > 0 || npc.isStar > 0) {
-        npc.state = NPC_STATE.NORMAL;
-        return;
-    }
-    
-    const rank = getNpcRank(npc);
-    const isLeading = rank <= 3;
-    const isTrailing = rank >= 9;
-    
-    detectNpcObstacles(npc);
-    
-    npc.thinkTimer = (npc.thinkTimer || 0) - 1;
-    if (npc.thinkTimer <= 0) {
-        npc.thinkTimer = 10 + Math.floor(Math.random() * 20);
-        
-        if (npc.frontObstacle && npc.frontObstacleDist < 12) {
-            npc.state = NPC_STATE.AVOIDING;
-            npc.avoidTimer = 20 + Math.floor(Math.random() * 20);
-            const obs = npc.frontObstacle;
-            if (obs === 'wall_right' || obs === 'pole1' || obs === 'pole2') {
-                npc.targetOffset = -6 - Math.random() * 4;
-            } else if (obs === 'wall_left') {
-                npc.targetOffset = 6 + Math.random() * 4;
-            } else if (obs === 'water') {
-                const px = npc.mesh.position.x;
-                const bridgeTargets = [0, 125, 250];
-                let nearest = bridgeTargets.reduce((a, b) => Math.abs(a - px) < Math.abs(b - px) ? a : b);
-                npc.targetOffset = (nearest - px) * 0.3;
-            } else if (obs && obs.mesh) {
-                const side = Math.random() > 0.5 ? 1 : -1;
-                npc.targetOffset = side * (5 + Math.random() * 3);
-            }
-            npc.lastStateChange = 60;
-            return;
-        }
-        
-        if (npc.frontObstacle && npc.frontObstacle.mesh && npc.frontObstacleDist < 15) {
-            npc.state = NPC_STATE.SLIPSTREAM;
-            npc.slipstreamTimer = 20;
-            npc.lastStateChange = 30;
-            return;
-        }
-        
-        if (!isLeading && npc.frontObstacle && npc.frontObstacle.mesh && npc.frontObstacleDist < 12) {
-            npc.state = NPC_STATE.OVERTAKING;
-            npc.overtakeTimer = 30;
-            const side = Math.random() > 0.5 ? 1 : -1;
-            npc.targetOffset = side * (6 + Math.random() * 3);
-            npc.lastStateChange = 40;
-            return;
-        }
-        
-        if (isLeading && rank <= 5) {
-            let behindNpc = null;
-            let behindDist = Infinity;
-            const px = npc.mesh.position.x;
-            const pz = npc.mesh.position.z;
-            const angle = npc.mesh.rotation.y;
-            
-            npcs.forEach(other => {
-                if (other === npc) return;
-                const dx = other.mesh.position.x - px;
-                const dz = other.mesh.position.z - pz;
-                const dist = Math.sqrt(dx*dx + dz*dz);
-                if (dist > 20) return;
-                const angleToOther = Math.atan2(dx, dz);
-                let angleDiff = angleToOther - angle;
-                while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
-                while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
-                if (Math.abs(angleDiff) > 1.5 && dist < behindDist) {
-                    behindNpc = other;
-                    behindDist = dist;
-                }
-            });
-            
-            const pdx = carGroup.position.x - px;
-            const pdz = carGroup.position.z - pz;
-            const pdist = Math.sqrt(pdx*pdx + pdz*pdz);
-            if (pdist < 20) {
-                const pAngle = Math.atan2(pdx, pdz);
-                let pDiff = pAngle - angle;
-                while (pDiff > Math.PI) pDiff -= Math.PI * 2;
-                while (pDiff < -Math.PI) pDiff += Math.PI * 2;
-                if (Math.abs(pDiff) > 1.5 && pdist < behindDist) {
-                    behindNpc = 'player';
-                    behindDist = pdist;
-                }
-            }
-            
-            if (behindNpc && behindDist < 10 && Math.random() < npc.aggression * 0.5) {
-                npc.state = NPC_STATE.BLOCKING;
-                npc.blockTimer = 40 + Math.floor(Math.random() * 30);
-                if (behindNpc === 'player') {
-                    const pdx2 = carGroup.position.x - px;
-                    const pdz2 = carGroup.position.z - pz;
-                    const pAngle2 = Math.atan2(pdx2, pdz2);
-                    const blockSide = Math.sin(pAngle2 - angle) > 0 ? 1 : -1;
-                    npc.targetOffset = -blockSide * 3;
-                } else if (behindNpc.mesh) {
-                    const bdx = behindNpc.mesh.position.x - px;
-                    const bdz = behindNpc.mesh.position.z - pz;
-                    const bAngle = Math.atan2(bdx, bdz);
-                    const blockSide = Math.sin(bAngle - angle) > 0 ? 1 : -1;
-                    npc.targetOffset = -blockSide * 3;
-                }
-                npc.lastStateChange = 50;
-                return;
-            }
-        }
-        
-        if (npc.boostTimer > 0) {
-            npc.state = NPC_STATE.BOOSTING;
-            return;
-        }
-        
-        npc.state = NPC_STATE.NORMAL;
-        npc.targetOffset = 0;
-    }
-}
-
-function updateNpcItemStrategy(npc) {
-    if (!npc.heldItem || npc.itemUseTimer > 0) return;
-    
-    const rank = getNpcRank(npc);
-    const isLeading = rank <= 3;
-    const isTrailing = rank >= 9;
-    const hasFrontCar = npc.frontObstacle && npc.frontObstacle.mesh;
-    const frontDist = npc.frontObstacleDist || Infinity;
-    
-    let nearbyCount = 0;
-    npcs.forEach(other => {
-        if (other === npc) return;
-        if (npc.mesh.position.distanceTo(other.mesh.position) < 15) nearbyCount++;
-    });
-    if (carGroup.position.distanceTo(npc.mesh.position) < 15) nearbyCount++;
-    
-    let shouldUse = false;
-    
-    switch(npc.heldItem) {
-        case "キノコ":
-            if (hasFrontCar && frontDist < 12) shouldUse = true;
-            const px = npc.mesh.position.x;
-            const pz = npc.mesh.position.z;
-            const isOnDirt = !(px > -40 && px < 40 && pz > -150 && pz < 350) &&
-                            !(px > -340 && px < 40 && pz > -240 && pz < -160) &&
-                            !(px > -340 && px < -260 && pz > -440 && pz < -160);
-            if (isOnDirt) shouldUse = true;
-            if (Math.random() < 0.01 * npc.aggression) shouldUse = true;
-            break;
-        case "金キノコ":
-            if (!isLeading) shouldUse = true;
-            if (Math.random() < 0.02) shouldUse = true;
-            break;
-        case "緑甲羅":
-            if (hasFrontCar && frontDist < 20) shouldUse = true;
-            if (Math.random() < 0.015 * npc.aggression) shouldUse = true;
-            break;
-        case "赤甲羅":
-            const pdx = carGroup.position.x - npc.mesh.position.x;
-            const pdz = carGroup.position.z - npc.mesh.position.z;
-            const pDist = Math.sqrt(pdx*pdx + pdz*pdz);
-            const angle = npc.mesh.rotation.y;
-            const pAngle = Math.atan2(pdx, pdz);
-            let pDiff = pAngle - angle;
-            while (pDiff > Math.PI) pDiff -= Math.PI * 2;
-            while (pDiff < -Math.PI) pDiff += Math.PI * 2;
-            if (pDist < 25 && Math.abs(pDiff) < 1.0) {
-                shouldUse = true;
-            } else if (hasFrontCar && frontDist < 20) {
-                shouldUse = true;
-            }
-            if (Math.random() < 0.01 * npc.aggression) shouldUse = true;
-            break;
-        case "サンダー":
-            let aheadCount = 0;
-            npcs.forEach(other => {
-                if (other === npc) return;
-                if (other.lap + other.progress > npc.lap + npc.progress) aheadCount++;
-            });
-            if (aheadCount >= 3) shouldUse = true;
-            if (nearbyCount >= 4) shouldUse = true;
-            if (Math.random() < 0.005 * npc.aggression) shouldUse = true;
-            break;
-        case "デカキノコ":
-            if (!isLeading || nearbyCount >= 3) shouldUse = true;
-            if (Math.random() < 0.01) shouldUse = true;
-            break;
-        case "スター":
-            if (nearbyCount >= 3 || isTrailing) shouldUse = true;
-            if (Math.random() < 0.005 * npc.aggression) shouldUse = true;
-            break;
-        case "テレサ":
-            if (hasFrontCar) shouldUse = true;
-            if (Math.random() < 0.015) shouldUse = true;
-            break;
-        default:
-            if (Math.random() < 0.005) shouldUse = true;
-    }
-    
-    if (shouldUse) {
-        useNpcItem(npc);
-    }
-}
-
-function updateNpcMovement(npc, nSpeed) {
-    let speedMod = 1.0;
-    
-    switch(npc.state) {
-        case NPC_STATE.AVOIDING:
-            speedMod = 0.85;
-            npc.avoidTimer--;
-            if (npc.avoidTimer <= 0) {
-                npc.targetOffset *= 0.9;
-                if (Math.abs(npc.targetOffset) < 0.5) npc.targetOffset = 0;
-            }
-            break;
-        case NPC_STATE.SLIPSTREAM:
-            speedMod = 1.15;
-            npc.slipstreamTimer--;
-            if (npc.slipstreamTimer <= 0) {
-                if (npc.frontObstacle && npc.frontObstacle.mesh && npc.frontObstacleDist < 10) {
-                    npc.state = NPC_STATE.OVERTAKING;
-                    npc.overtakeTimer = 20;
-                    const side = Math.random() > 0.5 ? 1 : -1;
-                    npc.targetOffset = side * 5;
-                }
-            }
-            break;
-        case NPC_STATE.OVERTAKING:
-            speedMod = 1.2;
-            npc.overtakeTimer--;
-            if (npc.overtakeTimer <= 0 || !npc.frontObstacle) {
-                npc.state = NPC_STATE.NORMAL;
-                npc.targetOffset = 0;
-            }
-            break;
-        case NPC_STATE.BLOCKING:
-            speedMod = 0.9;
-            npc.blockTimer--;
-            if (npc.blockTimer <= 0) {
-                npc.state = NPC_STATE.NORMAL;
-                npc.targetOffset = 0;
-            }
-            break;
-        case NPC_STATE.BOOSTING:
-            speedMod = 1.3;
-            break;
-        default:
-            npc.targetOffset *= 0.95;
-            if (Math.abs(npc.targetOffset) < 0.1) npc.targetOffset = 0;
-            break;
-    }
-    
-    const skillFactor = 0.85 + npc.skill * 0.3;
-    return nSpeed * speedMod * skillFactor;
-}
-
 function getRandomItemByRank(rank) {
     if (raceState !== 2) {
         return itemTypes[Math.floor(Math.random() * itemTypes.length)];
     }
-    
     let pool = [];
     if (rank <= 3) {
-        pool = ["キノコ", "キノコ", "緑甲羅", "緑甲羅", "赤甲羅", "テレサ"];
+        pool = ["キノコ", "コイン", "コイン", "コイン", "コイン", "コイン", "コイン", "コイン", "コイン", "コイン", "緑甲羅",];
     } else if (rank <= 7) {
-        pool = ["キノコ", "赤甲羅", "赤甲羅", "デカキノコ", "金キノコ", "スター", "テレサ"];
+        pool = ["キノコ", "赤甲羅", "赤甲羅", "金キノコ", "スター", "青甲羅", "ファイヤーフラワー", "ブーメラン", "ボム兵", "キノコ3", "緑甲羅3", "赤甲羅3"];
     } else {
-        pool = ["金キノコ", "スター", "スター", "サンダー", "テレサ", "テレサ"];
+        pool = ["金キノコ", "スター", "スター", "サンダー", "青甲羅", "青甲羅", "ブーメラン", "ボム兵", "ボム兵", "キノコ3", "キノコ3", "緑甲羅3", "赤甲羅3"];
     }
     return pool[Math.floor(Math.random() * pool.length)];
 }
@@ -841,10 +531,10 @@ function createEmojiSprite(emoji) {
     const canvas = document.createElement('canvas');
     canvas.width = 128; canvas.height = 128;
     const ctx = canvas.getContext('2d');
-    ctx.font = '90px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(emoji, 64, 64);
+    ctx.font = '80px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(emoji, 64, 64);
     const texture = new THREE.CanvasTexture(canvas);
     const material = new THREE.SpriteMaterial({ map: texture, transparent: true });
-    const sprite = new THREE.Sprite(material); sprite.scale.set(7, 7, 1);
+    const sprite = new THREE.Sprite(material); sprite.scale.set(4, 4, 1);
     return sprite;
 }
 
@@ -854,12 +544,18 @@ function spawnDroppedItem(itemType, basePosition) {
     const angle = Math.random() * Math.PI * 2;
     const radius = Math.random() * 9 + 4;
     sprite.position.set(basePosition.x + Math.cos(angle) * radius, 2.0, basePosition.z + Math.sin(angle) * radius);
+    sprite.scale.set(7, 7, 1);
     scene.add(sprite);
     droppedItems.push({ mesh: sprite, type: itemType, timer: 600 });
 }
 
 function dropPlayerItems() {
-    isItemRoulette = false; rouletteSlot = -1; 
+    isItemRoulette = false; rouletteSlot = -1;
+    fireFlowerAmmo = 0;
+    boomerangTotalReturns = 0;
+    
+    clearTripleItems();
+    
     if (isItemShielding && shieldShellMesh) {
         carGroup.remove(shieldShellMesh); shieldShellMesh = null; isItemShielding = false;
         if (heldItems[0]) spawnDroppedItem(heldItems[0], carGroup.position); heldItems[0] = null;
@@ -868,6 +564,18 @@ function dropPlayerItems() {
     }
     if (heldItems[1]) { spawnDroppedItem(heldItems[1], carGroup.position); heldItems[1] = null; }
     updateItemUI();
+}
+
+function clearTripleItems() {
+    tripleItemSprites.forEach(s => {
+        carGroup.remove(s);
+        if (s.parent) s.parent.remove(s);
+    });
+    tripleItemSprites = [];
+    tripleItemCount = 0;
+    tripleItemType = null;
+    tripleItemInSlot1 = false;
+    document.getElementById("triple-indicator").style.display = "none";
 }
 
 function dropCoins() {
@@ -895,82 +603,58 @@ const coinsArray = [];
 coinPositions.forEach(pos => {
     const sprite = createEmojiSprite("🪙");
     sprite.position.set(pos.x, 2.5, pos.z);
+    sprite.scale.set(7, 7, 1);
     coinGroup.add(sprite);
     coinsArray.push({ mesh: sprite, collected: false });
 });
 scene.add(coinGroup);
 
-// ============================================================
-// ⌨️ キーボードイベント
-// ============================================================
-window.addEventListener('keydown', (e) => { 
+
+window.addEventListener('keydown', (e) => {
     let k = e.key.toLowerCase(); if (k === "shift") k = "shift";
-    
-    // Zキーでカメラ反転
-    if (k === "z" && !keys.z) {
-        keys.z = true;
-        cameraFlipped = !cameraFlipped;
-        if (audioCtx) {
-            try {
-                const osc = audioCtx.createOscillator();
-                const gain = audioCtx.createGain();
-                osc.frequency.value = cameraFlipped ? 880 : 660;
-                gain.gain.value = 0.08;
-                osc.connect(gain);
-                gain.connect(audioCtx.destination);
-                osc.start();
-                osc.stop(audioCtx.currentTime + 0.08);
-            } catch(e) {}
-        }
-        document.getElementById("status-text").innerText = cameraFlipped ? "🔴 後方視点" : "🔵 ノーマル視点";
-        e.preventDefault();
-        return;
-    }
-    
     if (e.key === " " && !keys[" "]) {
         keys[" "] = true;
         if (itemBulletTimer > 0) return;
         if (isSquishedTimer > 0) return;
-        
         const distToPole1XZ = Math.sqrt(Math.pow(carGroup.position.x - pole1Group.position.x, 2) + Math.pow(carGroup.position.z - pole1Group.position.z, 2));
         const distToPole2XZ = Math.sqrt(Math.pow(carGroup.position.x - pole2Group.position.x, 2) + Math.pow(carGroup.position.z - pole2Group.position.z, 2));
-        
         if ((distToPole1XZ < 24.0 || distToPole2XZ < 24.0) && poleSpinTimer <= 0 && Math.abs(speed) > 0.3) {
-            poleSpinTimer = 45; jumpChargeTime = 0; jumpVelocity = 0.85; soundBoost(); return; 
+            poleSpinTimer = 45; jumpChargeTime = 0; jumpVelocity = 0.85; soundBoost(); return;
         }
-
         if (isWallRiding) {
-            isWallRiding = false; jumpVelocity = 0.5; wallKickVelocityX = -wallRideSide * 1.3; wallKickIgnoreTimer = 20; hasJumpActioned = true; 
+            isWallRiding = false; jumpVelocity = 0.5; wallKickVelocityX = -wallRideSide * 1.3; wallKickIgnoreTimer = 20; hasJumpActioned = true;
             wallKickCount++; soundBoost();
             document.getElementById("turbo-ui").innerText = `🧱💥 壁キック発動！！！ (${wallKickCount}回) 💥🧱`; document.getElementById("turbo-ui").style.color = "#ff33ff";
             return;
         }
-
-        if (carY > 0.4 && jumpActionTimer <= 0 && poleSpinTimer <= 0 && !hasJumpActioned) { 
+        if (carY > 0.4 && jumpActionTimer <= 0 && poleSpinTimer <= 0 && !hasJumpActioned) {
             jumpActionTimer = 30;
             jumpRotX = (Math.random() > 0.5 ? 1 : -1) * (0.18 + Math.random() * 0.15);
             jumpRotZ = (Math.random() - 0.5) * 0.22;
-            document.getElementById("turbo-ui").innerText = "✨ ジャンプアクション！ ✨"; 
-            document.getElementById("turbo-ui").style.color = "#ffeb3b"; 
+            document.getElementById("turbo-ui").innerText = "✨ ジャンプアクション！ ✨";
+            document.getElementById("turbo-ui").style.color = "#ffeb3b";
         }
     }
-    if ((k === "shift" || k === "j") && !keys[k]) { keys[k] = true; if (!isItemRoulette && heldItems[0]) { useItem(); } }
+    if ((k === "shift" || k === "j") && !keys[k]) { 
+        keys[k] = true; 
+        if (!isItemRoulette) { useItem(); }
+    }
+    if (k === "z") {
+        keys.z = true;
+        cameraFlipped = !cameraFlipped;
+        cameraFlipTarget = cameraFlipped ? Math.PI : 0;
+        playTone(600, 0.05, 'sine', 0.1);
+        setTimeout(() => playTone(800, 0.05, 'sine', 0.1), 50);
+    }
     if (k in keys) keys[k] = true;
 });
 
-window.addEventListener('keyup', (e) => { 
+window.addEventListener('keyup', (e) => {
     let k = e.key.toLowerCase(); if (k === "shift") k = "shift";
-    
-    if (k === "z") {
-        keys.z = false;
-        e.preventDefault();
-        return;
-    }
-    
-    if (e.key === " ") { 
-        keys[" "] = false; 
-        if (itemBulletTimer > 0) return; 
-        if (isSquishedTimer > 0) { jumpChargeTime = 0; return; } 
+    if (e.key === " ") {
+        keys[" "] = false;
+        if (itemBulletTimer > 0) return;
+        if (isSquishedTimer > 0) { jumpChargeTime = 0; return; }
         if (carY <= 0.15) {
             let powerRatio = Math.min(jumpChargeTime / 50, 1.0);
             jumpVelocity = 0.16 + (0.22 * powerRatio);
@@ -989,141 +673,29 @@ window.addEventListener('keyup', (e) => {
             jumpRotX = -(0.15 + powerRatio * 0.25);
             jumpRotZ = (Math.random() - 0.5) * 0.1 * powerRatio;
         }
-        jumpChargeTime = 0; 
+        jumpChargeTime = 0;
     }
+    if (k === "z") keys.z = false;
     if (k in keys) keys[k] = false;
 });
 
-function updateItemUI() {
-    const slot1 = document.getElementById("item-slot-1");
-    const slot2 = document.getElementById("item-slot-2");
-
-    if (itemBulletTimer > 0 && !heldItems[0]) slot1.innerHTML = `🚀キラー🚀<br>${Math.ceil(itemBulletTimer/60)}秒`;
-    else if (itemStarTimer > 0 && !heldItems[0]) slot1.innerHTML = `⭐スター⭐<br>${Math.ceil(itemStarTimer/60)}秒`;
-    else if (itemGoldenTimer > 0 && !heldItems[0]) slot1.innerHTML = `🌟金キノ🌟<br>${Math.ceil(itemGoldenTimer/60)}秒`;
-    else if (itemBooTimer > 0 && !heldItems[0]) slot1.innerHTML = `👻テレサ👻<br>${Math.ceil(itemBooTimer/60)}秒`;
-    else if (isItemRoulette && rouletteSlot === 0) { }
-    else slot1.innerHTML = heldItems[0] ? (isItemShielding ? "【再入力】<br>発射！" : "【Shift】<br>" + getEmojiForItem(heldItems[0]) + heldItems[0]) : "ITEM 1<br>なし";
-    
-    if (isItemRoulette && rouletteSlot === 1) { }
-    else slot2.innerHTML = heldItems[1] ? "控え<br>" + getEmojiForItem(heldItems[1]) + heldItems[1] : "ITEM 2<br>なし";
-}
-
-function useItem() {
-    const turboText = document.getElementById("turbo-ui");
-    let item = heldItems[0];
-    if (!item) return;
-
-    if (itemBulletTimer > 0 && item !== "キラー") return;
-
-    if ((item === "緑甲羅" || item === "赤甲羅") && !isItemShielding) {
-        isItemShielding = true;
-        const shellColor = (item === "緑甲羅") ? 0x33cc33 : 0xff3333;
-        shieldShellMesh = new THREE.Mesh(new THREE.SphereGeometry(1.2, 16, 16), new THREE.MeshStandardMaterial({ color: shellColor, roughness: 0.3 }));
-        shieldShellMesh.position.set(0, 0.5, 2.5); carGroup.add(shieldShellMesh);
-        turboText.innerText = `🛡️ ${item}で後方をホールドガード中！ 🛡️`; turboText.style.color = "#33ffff"; updateItemUI(); return; 
-    }
-
-    if (item === "キノコ") { itemMushroomTimer = 120; soundBoost(); turboText.innerText = "🍄 キノコダッシュ！！ 🍄"; turboText.style.color = "#ff5555"; } 
-    else if (item === "金キノコ") { itemGoldenTimer = 600; soundBoost(); turboText.innerText = "🌟 パワフルキノコ発動！ 🌟"; turboText.style.color = "#ffeb3b"; }
-    else if (item === "緑甲羅") {
-        if (shieldShellMesh) { carGroup.remove(shieldShellMesh); shieldShellMesh = null; } isItemShielding = false;
-        const shellMesh = new THREE.Mesh(new THREE.SphereGeometry(1.5, 16, 16), new THREE.MeshStandardMaterial({ color: 0x33cc33, roughness: 0.3 }));
-        shellMesh.position.copy(carGroup.position).y += 0.5;
-        const dir = new THREE.Vector3(-Math.sin(carGroup.rotation.y), 0, -Math.cos(carGroup.rotation.y)).normalize();
-        shellMesh.position.addScaledVector(dir, 4.0); scene.add(shellMesh); shells.push({ mesh: shellMesh, dir: dir, type: "green", life: 300 });
-    } 
-    else if (item === "赤甲羅") {
-        if (shieldShellMesh) { carGroup.remove(shieldShellMesh); shieldShellMesh = null; } isItemShielding = false;
-        const shellMesh = new THREE.Mesh(new THREE.SphereGeometry(1.5, 16, 16), new THREE.MeshStandardMaterial({ color: 0xff3333, roughness: 0.3 }));
-        shellMesh.position.copy(carGroup.position).y += 0.5;
-        const dir = new THREE.Vector3(-Math.sin(carGroup.rotation.y), 0, -Math.cos(carGroup.rotation.y)).normalize();
-        shellMesh.position.addScaledVector(dir, 4.0); scene.add(shellMesh); 
-        let target = npcs[Math.floor(Math.random() * npcs.length)]; shells.push({ mesh: shellMesh, type: "red", targetNpc: target, life: 400 });
-    } 
-    else if (item === "サンダー") { 
-        soundHit(); turboText.innerText = "⚡ サンダーボルト！！！ ⚡"; 
-        npcs.forEach(npc => { if (npc.isMega <= 0 && npc.isStar <= 0) { dropNpcItems(npc); npc.isSquished = 180; npc.boostTimer = 0; } }); 
-    } 
-    else if (item === "デカキノコ") { itemMegaTimer = 300; soundBoost(); turboText.innerText = "🌟 デカキノコ！！！ 🌟"; }
-    else if (item === "スター") { itemStarTimer = 420; soundBoost(); turboText.innerText = "⭐ スター無敵状態！！！ ⭐"; turboText.style.color = "#ffff00"; }
-    else if (item === "テレサ") {
-        itemBooTimer = 180;
-        soundBoost();
-        let stolenItem = null;
-        let targets = npcs.filter(n => n.heldItem !== null);
-        if (targets.length > 0) {
-            let luckyTarget = targets[Math.floor(Math.random() * targets.length)];
-            stolenItem = luckyTarget.heldItem;
-            luckyTarget.heldItem = null;
-            heldItems[1] = stolenItem;
-            turboText.innerText = `👻 テレサがライバルから「${stolenItem}」を奪い取った！ 👻`;
-        } else {
-            stolenItem = getRandomItemByRank(getPlayerRank());
-            heldItems[1] = stolenItem;
-            turboText.innerText = `👻 ライバルは誰もアイテムを所持していなかった。お土産に「${stolenItem}」を拾ってきた！ 👻`;
-        }
-        turboText.style.color = "#eeeeee";
-    }
-
-    heldItems[0] = heldItems[1]; heldItems[1] = null; updateItemUI();
-}
-
-function useNpcItem(npc) {
-    if (!npc.heldItem) return;
-    const item = npc.heldItem; npc.heldItem = null;
-    if (item === "キノコ" || item === "金キノコ" || item === "デカキノコ" || item === "スター") {
-        npc.boostTimer = 100; if (item === "デカキノコ") npc.isMega = 200; if (item === "スター") npc.isStar = 200;
-    } else if (item === "緑甲羅") {
-        const sm = new THREE.Mesh(new THREE.SphereGeometry(1.5, 8, 8), new THREE.MeshStandardMaterial({ color: 0x33cc33 }));
-        sm.position.copy(npc.mesh.position).y += 0.5;
-        const dir = new THREE.Vector3(-Math.sin(npc.mesh.rotation.y), 0, -Math.cos(npc.mesh.rotation.y)).normalize();
-        sm.position.addScaledVector(dir, 4.0); scene.add(sm); shells.push({ mesh: sm, dir: dir, type: "green", life: 250 });
-    } else if (item === "赤甲羅") {
-        const sm = new THREE.Mesh(new THREE.SphereGeometry(1.5, 8, 8), new THREE.MeshStandardMaterial({ color: 0xff3333 }));
-        sm.position.copy(npc.mesh.position).y += 0.5; scene.add(sm); 
-        if (Math.random() < 0.4) {
-            shells.push({ mesh: sm, type: "red_to_player", life: 350 }); 
-        } else {
-            let target = npcs[Math.floor(Math.random() * npcs.length)];
-            shells.push({ mesh: sm, type: "red", targetNpc: target, life: 400 });
-        }
-    } else if (item === "サンダー") {
-        if (itemMegaTimer <= 0 && itemStarTimer <= 0 && itemBooTimer <= 0 && itemBulletTimer <= 0 && playerHitInvincibleTimer <= 0) { 
-            isSquishedTimer = 120; speed = 0; turboTimer = 0; isDrifting = false; driftCharge = 0; turboState = 0; itemMushroomTimer = 0; itemGoldenTimer = 0; soundHit(); 
-            dropPlayerItems();
-            dropCoins();
-            playerHitInvincibleTimer = 180; 
-            const tx = document.getElementById("turbo-ui"); tx.innerText = "⚡ ライバルのサンダーを喰らった！！コインとアイテムを失った！ ⚡"; tx.style.color = "#bb33ff";
-        } else {
-            const tx = document.getElementById("turbo-ui"); tx.innerText = "🛡️ 無敵判定によりライバルのサンダーを完全無効化！ 🛡️"; tx.style.color = "#ffff00";
-        }
-        npcs.forEach(other => { if (other !== npc && other.isMega <= 0 && other.isStar <= 0) { dropNpcItems(other); other.isSquished = 120; other.boostTimer = 0; } });
-    } else if (item === "テレサ") {
-        npc.isBoo = 150;
-        if (heldItems[0] || heldItems[1]) {
-            if (heldItems[1]) { npc.heldItem = heldItems[1]; heldItems[1] = null; }
-            else { npc.heldItem = heldItems[0]; heldItems[0] = null; }
-            updateItemUI();
-        } else {
-            let targets = npcs.filter(n => n !== npc && n.heldItem);
-            if (targets.length > 0) {
-                let target = targets[Math.floor(Math.random() * targets.length)];
-                npc.heldItem = target.heldItem; target.heldItem = null;
-            }
-        }
-        if (npc.heldItem) npc.itemUseTimer = Math.floor(Math.random() * 60) + 20;
-    }
-}
-
 function startRaceGridPlacement() {
-    initAudio(); 
+    initAudio();
     speed = 0; playerLap = 1; midCheckpointPassed = false; isFinished = false; isSquishedTimer = 0; carY = 0; jumpVelocity = 0; lastPlayerSegment = 0;
     hasJumpActioned = false; jumpActionTimer = 0; carGroup.scale.set(1, 1, 1); carModel.rotation.set(0,0,0);
-    heldItems = [null, null]; isItemRoulette = false; rouletteSlot = -1; itemMushroomTimer = 0; itemMegaTimer = 0; itemGoldenTimer = 0; itemStarTimer = 0; itemBooTimer = 0; itemBulletTimer = 0; bulletProgress = 0; jumpChargeTime = 0;
+    heldItems = [null, null]; isItemRoulette = false; rouletteSlot = -1; itemMushroomTimer = 0; itemMegaTimer = 0; itemGoldenTimer = 0; itemStarTimer = 0; itemBulletTimer = 0; bulletProgress = 0; jumpChargeTime = 0;
     isWallRiding = false; wallRideSide = 0; wallKickVelocityX = 0; wallKickIgnoreTimer = 0; poleSpinTimer = 0;
     wallKickCount = 0; jumpActionCount = 0; lastSecondsInt = -1; playerHitInvincibleTimer = 0;
     coins = 0; playerProgress = 0;
+    warningTimer = 0; warningMessage = "";
+    cameraFlipped = false; cameraFlipTarget = 0; cameraFlipCurrent = 0;
+
+    fireFlowerAmmo = 0; fireballCooldown = 0;
+    fireballs.forEach(fb => scene.remove(fb.mesh)); fireballs.length = 0;
+    boomerangActive = false; boomerangTotalReturns = 0;
+    boomerangs.forEach(b => scene.remove(b.mesh)); boomerangs.length = 0;
+    bombs.forEach(b => scene.remove(b.mesh)); bombs.length = 0;
+    clearTripleItems();
 
     carModel.material.transparent = false;
     carModel.material.opacity = 1.0;
@@ -1134,30 +706,652 @@ function startRaceGridPlacement() {
 
     droppedItems.forEach(item => scene.remove(item.mesh));
     droppedItems.length = 0;
-    
+    explosions.forEach(exp => scene.remove(exp.mesh));
+    explosions.length = 0;
+
     coinsArray.forEach(c => { c.mesh.visible = true; c.collected = false; });
     document.getElementById("coin-text").innerText = `🪙 コイン: ${coins}/10`;
     updateItemUI();
-    
+
     carGroup.position.set(0, 0, 130); carGroup.rotation.set(0, 0, 0); currentCameraPos.set(0, 7, 170);
-    
     npcs.forEach((npc, index) => {
-        npc.lap = 1; npc.progress = -0.006 * (index + 1); npc.isSquished = 0; npc.isMega = 0; npc.isStar = 0; npc.heldItem = null; npc.itemUseTimer = 0; npc.boostTimer = 0;
+        npc.lap = 1; npc.progress = -0.006 * (index + 1); npc.isSquished = 0; npc.isMega = 0; npc.isStar = 0; npc.heldItem = null; npc.boostTimer = 0;
         npc.mesh.scale.set(1,1,1); npc.mesh.position.set(((index % 2 === 0) ? 7 : -7), 0, 135 + (index * 9) + 15); npc.mesh.rotation.set(0, 0, 0);
-        npc.state = NPC_STATE.NORMAL;
-        npc.targetOffset = 0;
-        npc.avoidTimer = 0;
-        npc.blockTimer = 0;
-        npc.slipstreamTimer = 0;
-        npc.overtakeTimer = 0;
-        npc.thinkTimer = 0;
-        npc.frontObstacle = null;
-        npc.frontObstacleDist = Infinity;
     });
+}
+
+function updateItemUI() {
+    const slot1 = document.getElementById("item-slot-1");
+    const slot2 = document.getElementById("item-slot-2");
+
+    if (fireFlowerAmmo > 0 && heldItems[0] === "ファイヤーフラワー") {
+        slot1.innerHTML = `🔥ファイヤーフラワー<br>残り${fireFlowerAmmo}発`;
+    } else if (itemBulletTimer > 0 && !heldItems[0]) slot1.innerHTML = `🚀キラー🚀<br>${Math.ceil(itemBulletTimer/60)}秒`;
+    else if (itemStarTimer > 0 && !heldItems[0]) slot1.innerHTML = `⭐スター⭐<br>${Math.ceil(itemStarTimer/60)}秒`;
+    else if (itemGoldenTimer > 0 && !heldItems[0]) slot1.innerHTML = `🌟金キノ🌟<br>${Math.ceil(itemGoldenTimer/60)}秒`;
+    else if (isItemRoulette && rouletteSlot === 0) { }
+    else if (tripleItemCount > 0 && heldItems[0] === tripleItemType && tripleItemInSlot1) {
+        const emoji = getTripleEmoji(tripleItemType);
+        slot1.innerHTML = `${emoji}×${tripleItemCount}<br>残り${tripleItemCount}個`;
+    }
+    else slot1.innerHTML = heldItems[0] ? (isItemShielding ? "【再入力】<br>発射！" : "【Shift】<br>" + getEmojiForItem(heldItems[0]) + heldItems[0]) : "ITEM 1<br>なし";
+
+    slot2.innerHTML = heldItems[1] ? "【控え】<br>" + getEmojiForItem(heldItems[1]) + heldItems[1] : "ITEM 2<br>なし";
+    
+    const indicator = document.getElementById("triple-indicator");
+    if (tripleItemCount > 0 && tripleItemInSlot1 && heldItems[0] === tripleItemType) {
+        indicator.style.display = "flex";
+        const emoji = getTripleEmoji(tripleItemType);
+        indicator.innerHTML = "";
+        for (let i = 0; i < tripleItemCount; i++) {
+            const span = document.createElement("span");
+            span.textContent = emoji;
+            indicator.appendChild(span);
+        }
+    } else {
+        indicator.style.display = "none";
+    }
+}
+
+function showShellWarning(msg, color) {
+    warningMessage = msg;
+    warningColor = color || "#ff3333";
+    warningTimer = 120;
+}
+
+// ---------- 3連アイテム生成（スロット1用） ----------
+function createTripleItems(type) {
+    clearTripleItems();
+    tripleItemType = type;
+    tripleItemCount = 3;
+    tripleItemInSlot1 = true;
+    
+    const emoji = getTripleEmoji(type);
+    for (let i = 0; i < 3; i++) {
+        const sprite = createEmojiSprite(emoji);
+        sprite.scale.set(3.5, 3.5, 1);
+        carGroup.add(sprite);
+        tripleItemSprites.push(sprite);
+    }
+    updateItemUI();
+}
+
+// 控え用（スプライトなし）
+function setTripleItemInSlot2(type) {
+    clearTripleItems();
+    tripleItemType = type;
+    tripleItemCount = 3;
+    tripleItemInSlot1 = false;
+    updateItemUI();
+}
+
+// スロット2からスロット1に3連が移動した時
+function moveTripleToSlot1() {
+    if (!heldItems[1] || !isTripleItem(heldItems[1])) return false;
+    
+    const type = heldItems[1];
+    heldItems[0] = type;
+    heldItems[1] = null;
+    createTripleItems(type);
+    updateItemUI();
+    return true;
+}
+
+// 3連アイテム1個消費
+function consumeTripleItem() {
+    if (tripleItemCount <= 0) return;
+    
+    tripleItemCount--;
+    
+    if (tripleItemInSlot1 && tripleItemSprites.length > 0) {
+        const removed = tripleItemSprites.pop();
+        carGroup.remove(removed);
+        if (removed.parent) removed.parent.remove(removed);
+    }
+    
+    if (tripleItemCount <= 0) {
+        if (heldItems[1] && isTripleItem(heldItems[1])) {
+            moveTripleToSlot1();
+        } else {
+            heldItems[0] = heldItems[1];
+            heldItems[1] = null;
+            clearTripleItems();
+        }
+    }
+    updateItemUI();
+}
+
+// ---------- アイテム使用 ----------
+function useItem() {
+    const turboText = document.getElementById("turbo-ui");
+    let item = heldItems[0];
+    if (!item) return;
+    if (itemBulletTimer > 0 && item !== "キラー") return;
+
+    // --- 3連アイテム ---
+    if (item === "キノコ3" && tripleItemCount > 0 && tripleItemInSlot1) {
+        itemMushroomTimer = 120;
+        soundBoost();
+        turboText.innerText = `🍄 キノコダッシュ！！ (残り${tripleItemCount-1}個) 🍄`;
+        turboText.style.color = "#ff5555";
+        consumeTripleItem();
+        return;
+    }
+
+    if (item === "緑甲羅3" && tripleItemCount > 0 && tripleItemInSlot1) {
+        if (isItemShielding && shieldShellMesh) {
+            carGroup.remove(shieldShellMesh); shieldShellMesh = null; isItemShielding = false;
+        }
+        const shellMesh = new THREE.Mesh(new THREE.SphereGeometry(1.5, 16, 16), new THREE.MeshStandardMaterial({ color: 0x33cc33, roughness: 0.3 }));
+        shellMesh.position.copy(carGroup.position).y += 0.5;
+        const dir = new THREE.Vector3(-Math.sin(carGroup.rotation.y), 0, -Math.cos(carGroup.rotation.y)).normalize();
+        shellMesh.position.addScaledVector(dir, 4.0); scene.add(shellMesh);
+        shells.push({ mesh: shellMesh, dir: dir, type: "green", life: 300, velocityY: 0 });
+        soundHit();
+        turboText.innerText = `🟢 緑甲羅発射！ (残り${tripleItemCount-1}個) 🟢`;
+        turboText.style.color = "#33cc33";
+        consumeTripleItem();
+        return;
+    }
+
+    if (item === "赤甲羅3" && tripleItemCount > 0 && tripleItemInSlot1) {
+        if (isItemShielding && shieldShellMesh) {
+            carGroup.remove(shieldShellMesh); shieldShellMesh = null; isItemShielding = false;
+        }
+        const shellMesh = new THREE.Mesh(new THREE.SphereGeometry(1.5, 16, 16), new THREE.MeshStandardMaterial({ color: 0xff3333, roughness: 0.3 }));
+        shellMesh.position.copy(carGroup.position).y += 0.5;
+        const dir = new THREE.Vector3(-Math.sin(carGroup.rotation.y), 0, -Math.cos(carGroup.rotation.y)).normalize();
+        shellMesh.position.addScaledVector(dir, 4.0); scene.add(shellMesh);
+        let target = npcs[Math.floor(Math.random() * npcs.length)];
+        shells.push({ mesh: shellMesh, type: "red", targetNpc: target, life: 400, velocityY: 0 });
+        soundHit();
+        turboText.innerText = `🔴 赤甲羅発射！ (残り${tripleItemCount-1}個) 🔴`;
+        turboText.style.color = "#ff3333";
+        consumeTripleItem();
+        return;
+    }
+
+    // --- ファイヤーフラワー ---
+    if (item === "ファイヤーフラワー") {
+        if (fireFlowerAmmo <= 0) {
+            heldItems[0] = heldItems[1];
+            heldItems[1] = null;
+            if (heldItems[0] && isTripleItem(heldItems[0])) {
+                createTripleItems(heldItems[0]);
+            }
+            updateItemUI();
+            return;
+        }
+        if (fireballCooldown > 0) return;
+
+        soundFireball();
+        const fireMat = new THREE.MeshStandardMaterial({
+            color: 0xff4400,
+            emissive: 0xff2200,
+            emissiveIntensity: 0.8
+        });
+        const fireMesh = new THREE.Mesh(new THREE.SphereGeometry(0.8, 12, 12), fireMat);
+        fireMesh.position.copy(carGroup.position);
+        fireMesh.position.y += 0.3;
+        const dir = new THREE.Vector3(-Math.sin(carGroup.rotation.y), 0, -Math.cos(carGroup.rotation.y)).normalize();
+        fireMesh.position.addScaledVector(dir, 3.0);
+        scene.add(fireMesh);
+
+        const trail = [];
+        for (let i = 0; i < 6; i++) {
+            const tMat = new THREE.MeshBasicMaterial({ color: 0xff6600, transparent: true, opacity: 0.3 });
+            const tMesh = new THREE.Mesh(new THREE.SphereGeometry(0.3, 6, 6), tMat);
+            tMesh.position.copy(fireMesh.position);
+            tMesh.visible = false;
+            scene.add(tMesh);
+            trail.push(tMesh);
+        }
+
+        fireballs.push({
+            mesh: fireMesh,
+            direction: dir,
+            life: 150,
+            speed: 7.0,
+            bounces: 0,
+            maxBounces: 2,
+            trail: trail,
+            trailCounter: 0,
+            isNpc: false,
+            ownerNpc: null
+        });
+
+        fireFlowerAmmo--;
+        fireballCooldown = 12;
+
+        if (fireFlowerAmmo <= 0) {
+            heldItems[0] = heldItems[1];
+            heldItems[1] = null;
+            if (heldItems[0] && isTripleItem(heldItems[0])) {
+                createTripleItems(heldItems[0]);
+            }
+            turboText.innerText = "🔥 ファイヤーフラワーを使い切った！ 🔥";
+            turboText.style.color = "#ff6600";
+        } else {
+            turboText.innerText = `🔥 ファイヤーフラワー 残り${fireFlowerAmmo}発 🔥`;
+            turboText.style.color = "#ff6600";
+        }
+        updateItemUI();
+        return;
+    }
+
+    // --- ブーメラン ---
+    if (item === "ブーメラン") {
+        if (boomerangActive) return;
+        if (boomerangTotalReturns >= 5) {
+            heldItems[0] = heldItems[1];
+            heldItems[1] = null;
+            if (heldItems[0] && isTripleItem(heldItems[0])) {
+                createTripleItems(heldItems[0]);
+            }
+            updateItemUI();
+            turboText.innerText = "🪃 ブーメランを使い切った！";
+            turboText.style.color = "#44ddff";
+            boomerangActive = false;
+            return;
+        }
+
+        soundBoomerangThrow();
+        const bMat = new THREE.MeshStandardMaterial({ color: 0x44ddff, emissive: 0x00aaff, emissiveIntensity: 0.3 });
+        const bMesh = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.3, 2.0), bMat);
+        bMesh.position.copy(carGroup.position);
+        bMesh.position.y += 0.5;
+        const dir = new THREE.Vector3(-Math.sin(carGroup.rotation.y), 0, -Math.cos(carGroup.rotation.y)).normalize();
+        bMesh.position.addScaledVector(dir, 2.5);
+        scene.add(bMesh);
+
+        boomerangActive = true;
+
+        boomerangs.push({
+            mesh: bMesh,
+            direction: dir,
+            life: 300,
+            speed: 4.5,
+            returnSpeed: 6.0,
+            phase: "out",
+            owner: carGroup,
+            hitTargets: new Set(),
+            angle: 0,
+            isNpc: false,
+            ownerNpc: null
+        });
+
+        heldItems[0] = null;
+        updateItemUI();
+        turboText.innerText = `🪃 ブーメランを投げた！ (${boomerangTotalReturns + 1}/5回目)`;
+        turboText.style.color = "#44ddff";
+        return;
+    }
+
+    // --- ボム兵 ---
+    if (item === "ボム兵") {
+        if (!isChargingBomb) {
+            isChargingBomb = true;
+            bombChargeTime = 0;
+            document.getElementById("charge-bar").style.display = "block";
+            document.getElementById("charge-fill").style.width = "0%";
+            turboText.innerText = "💣 ボム兵チャージ中...";
+            turboText.style.color = "#ff8800";
+            return;
+        }
+        return;
+    }
+
+    // --- 既存アイテム ---
+    if ((item === "緑甲羅" || item === "赤甲羅") && !isItemShielding) {
+        isItemShielding = true;
+        const shellColor = (item === "緑甲羅") ? 0x33cc33 : 0xff3333;
+        shieldShellMesh = new THREE.Mesh(new THREE.SphereGeometry(1.2, 16, 16), new THREE.MeshStandardMaterial({ color: shellColor, roughness: 0.3 }));
+        shieldShellMesh.position.set(0, 0.5, 2.5); carGroup.add(shieldShellMesh);
+        turboText.innerText = `🛡️ ${item}で後方をホールドガード中！ 🛡️`; turboText.style.color = "#33ffff"; updateItemUI(); return;
+    }
+
+    if (item === "キノコ") { itemMushroomTimer = 120; soundBoost(); turboText.innerText = "🍄 キノコダッシュ！！ 🍄"; turboText.style.color = "#ff5555"; }
+    else if (item === "金キノコ") { itemGoldenTimer = 600; soundBoost(); turboText.innerText = "🌟 パワフルキノコ発動！ 🌟"; turboText.style.color = "#ffeb3b"; }
+    else if (item === "緑甲羅") {
+        if (shieldShellMesh) { carGroup.remove(shieldShellMesh); shieldShellMesh = null; } isItemShielding = false;
+        const shellMesh = new THREE.Mesh(new THREE.SphereGeometry(1.5, 16, 16), new THREE.MeshStandardMaterial({ color: 0x33cc33, roughness: 0.3 }));
+        shellMesh.position.copy(carGroup.position).y += 0.5;
+        const dir = new THREE.Vector3(-Math.sin(carGroup.rotation.y), 0, -Math.cos(carGroup.rotation.y)).normalize();
+        shellMesh.position.addScaledVector(dir, 4.0); scene.add(shellMesh); shells.push({ mesh: shellMesh, dir: dir, type: "green", life: 300, velocityY: 0 });
+    }
+    else if (item === "赤甲羅") {
+        if (shieldShellMesh) { carGroup.remove(shieldShellMesh); shieldShellMesh = null; } isItemShielding = false;
+        const shellMesh = new THREE.Mesh(new THREE.SphereGeometry(1.5, 16, 16), new THREE.MeshStandardMaterial({ color: 0xff3333, roughness: 0.3 }));
+        shellMesh.position.copy(carGroup.position).y += 0.5;
+        const dir = new THREE.Vector3(-Math.sin(carGroup.rotation.y), 0, -Math.cos(carGroup.rotation.y)).normalize();
+        shellMesh.position.addScaledVector(dir, 4.0); scene.add(shellMesh);
+        let target = npcs[Math.floor(Math.random() * npcs.length)];
+        shells.push({ mesh: shellMesh, type: "red", targetNpc: target, life: 400, velocityY: 0 });
+    }
+    else if (item === "青甲羅") {
+        if (shieldShellMesh) { carGroup.remove(shieldShellMesh); shieldShellMesh = null; } isItemShielding = false;
+        const shellMesh = new THREE.Mesh(new THREE.SphereGeometry(1.5, 16, 16), new THREE.MeshStandardMaterial({ color: 0x0066ff, roughness: 0.3 }));
+        shellMesh.position.copy(carGroup.position).y += 0.5;
+        scene.add(shellMesh);
+        soundBlueShell();
+
+        let target = null;
+        let myRank = getPlayerRank();
+        let playerProg = playerLap + playerProgress;
+        let npcProgs = npcs.map(n => n.lap + n.progress);
+        let maxProg = Math.max(playerProg, ...npcProgs);
+        if (playerProg === maxProg) {
+            target = carGroup;
+        } else {
+            let topNpc = npcs.find(n => n.lap + n.progress === maxProg);
+            if (topNpc) target = topNpc.mesh;
+        }
+        if (!target) target = npcs[0].mesh;
+
+        shells.push({
+            mesh: shellMesh,
+            type: "blue",
+            target: target,
+            phase: "ascend",
+            height: 0,
+            targetY: 20,
+            speed: 3.5,
+            life: 1500,
+            velocityY: 0,
+            startPos: carGroup.position.clone(),
+            exploded: false,
+            fixedX: 0,
+            fixedZ: 0
+        });
+        turboText.innerText = "💙 青甲羅発射！高速追跡！ 💙"; turboText.style.color = "#0066ff";
+    }
+    else if (item === "サンダー") {
+        soundHit(); turboText.innerText = "⚡ サンダーボルト！！！ ⚡";
+        npcs.forEach(npc => { if (npc.isMega <= 0 && npc.isStar <= 0) { dropNpcItems(npc); npc.isSquished = 180; npc.boostTimer = 0; } });
+    }
+    else if (item === "デカキノコ") { itemMegaTimer = 300; soundBoost(); turboText.innerText = "🌟 デカキノコ！！！ 🌟"; }
+    else if (item === "スター") { itemStarTimer = 420; soundBoost(); turboText.innerText = "⭐ スター無敵状態！！！ ⭐"; turboText.style.color = "#ffff00"; }
+
+    heldItems[0] = heldItems[1];
+    heldItems[1] = null;
+    if (heldItems[0] && isTripleItem(heldItems[0])) {
+        createTripleItems(heldItems[0]);
+    }
+    updateItemUI();
+}
+
+// Shiftキーを離した時のボム兵発射処理
+window.addEventListener('keyup', function(e) {
+    if (e.key === "Shift") {
+        if (isChargingBomb && heldItems[0] === "ボム兵") {
+            const turboText = document.getElementById("turbo-ui");
+            const chargeRatio = Math.min(bombChargeTime / bombChargeMax, 1.0);
+            
+            soundBomb();
+            const bombMat = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.8 });
+            const bombMesh = new THREE.Mesh(new THREE.SphereGeometry(0.8, 12, 12), bombMat);
+            bombMesh.position.copy(carGroup.position);
+            bombMesh.position.y += 0.3;
+            const dir = new THREE.Vector3(-Math.sin(carGroup.rotation.y), 0, -Math.cos(carGroup.rotation.y)).normalize();
+            bombMesh.position.addScaledVector(dir, 2.0);
+            scene.add(bombMesh);
+
+            const fuseMat = new THREE.MeshBasicMaterial({ color: 0xff6600 });
+            const fuse = new THREE.Mesh(new THREE.SphereGeometry(0.2, 6, 6), fuseMat);
+            fuse.position.set(0, 0.8, 0.5);
+            bombMesh.add(fuse);
+
+            const speedMul = 2.0 + (chargeRatio * 4.0);
+            bombs.push({
+                mesh: bombMesh,
+                direction: dir,
+                velocityY: 0.4 + (chargeRatio * 0.8),
+                life: 60,
+                isNpc: false,
+                ownerNpc: null,
+                exploded: false,
+                speedMul: speedMul
+            });
+
+            heldItems[0] = heldItems[1];
+            heldItems[1] = null;
+            if (heldItems[0] && isTripleItem(heldItems[0])) {
+                createTripleItems(heldItems[0]);
+            }
+            updateItemUI();
+            const distance = 5 + (chargeRatio * 35);
+            turboText.innerText = `💣 ボム兵を投げた！ (飛距離${Math.round(distance)}m) 💣`;
+            turboText.style.color = "#ff8800";
+            document.getElementById("charge-bar").style.display = "none";
+            isChargingBomb = false;
+            bombChargeTime = 0;
+        }
+    }
+});
+
+function updateBombCharge() {
+    if (isChargingBomb && keys.shift) {
+        bombChargeTime = Math.min(bombChargeTime + 1, bombChargeMax);
+        const ratio = bombChargeTime / bombChargeMax;
+        document.getElementById("charge-fill").style.width = (ratio * 100) + "%";
+        const turboText = document.getElementById("turbo-ui");
+        turboText.innerText = `💣 チャージ中... ${Math.round(ratio * 100)}%`;
+        turboText.style.color = "#ff8800";
+    }
+}
+
+// NPC用アイテム使用（省略）
+function useNpcItem(npc) {
+    if (!npc.heldItem) return;
+    const item = npc.heldItem; npc.heldItem = null;
+
+    if (item === "ファイヤーフラワー") {
+        for (let i = 0; i < 3; i++) {
+            setTimeout(() => {
+                const fireMat = new THREE.MeshStandardMaterial({
+                    color: 0xff4400,
+                    emissive: 0xff2200,
+                    emissiveIntensity: 0.8
+                });
+                const fireMesh = new THREE.Mesh(new THREE.SphereGeometry(0.8, 12, 12), fireMat);
+                fireMesh.position.copy(npc.mesh.position);
+                fireMesh.position.y += 0.3;
+                const dir = new THREE.Vector3(-Math.sin(npc.mesh.rotation.y), 0, -Math.cos(npc.mesh.rotation.y)).normalize();
+                fireMesh.position.addScaledVector(dir, 3.0);
+                scene.add(fireMesh);
+                fireballs.push({
+                    mesh: fireMesh,
+                    direction: dir,
+                    life: 150,
+                    speed: 6.5,
+                    bounces: 0,
+                    maxBounces: 2,
+                    trail: [],
+                    trailCounter: 0,
+                    isNpc: true,
+                    ownerNpc: npc
+                });
+                soundFireball();
+            }, i * 120);
+        }
+        showShellWarning("🔥 ライバルがファイヤーフラワーを発射！", "#ff6600");
+        return;
+    }
+
+    if (item === "ブーメラン") {
+        const bMat = new THREE.MeshStandardMaterial({ color: 0x44ddff, emissive: 0x00aaff, emissiveIntensity: 0.3 });
+        const bMesh = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.3, 2.0), bMat);
+        bMesh.position.copy(npc.mesh.position);
+        bMesh.position.y += 0.5;
+        const dir = new THREE.Vector3(-Math.sin(npc.mesh.rotation.y), 0, -Math.cos(npc.mesh.rotation.y)).normalize();
+        bMesh.position.addScaledVector(dir, 2.5);
+        scene.add(bMesh);
+
+        boomerangs.push({
+            mesh: bMesh,
+            direction: dir,
+            life: 300,
+            speed: 4.0,
+            returnSpeed: 5.5,
+            phase: "out",
+            owner: npc.mesh,
+            hitTargets: new Set(),
+            angle: 0,
+            isNpc: true,
+            ownerNpc: npc
+        });
+        showShellWarning("🪃 ライバルがブーメランを投げた！", "#44ddff");
+        return;
+    }
+
+    if (item === "ボム兵") {
+        soundBomb();
+        const bombMat = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.8 });
+        const bombMesh = new THREE.Mesh(new THREE.SphereGeometry(0.8, 12, 12), bombMat);
+        bombMesh.position.copy(npc.mesh.position);
+        bombMesh.position.y += 0.3;
+        const dir = new THREE.Vector3(-Math.sin(npc.mesh.rotation.y), 0, -Math.cos(npc.mesh.rotation.y)).normalize();
+        bombMesh.position.addScaledVector(dir, 2.0);
+        scene.add(bombMesh);
+        bombs.push({
+            mesh: bombMesh,
+            direction: dir,
+            velocityY: 0.7,
+            life: 60,
+            isNpc: true,
+            ownerNpc: npc,
+            exploded: false,
+            speedMul: 3.0
+        });
+        showShellWarning("💣 ライバルがボム兵を投げた！", "#ff8800");
+        return;
+    }
+
+    if (item === "キノコ3") { npc.boostTimer = 100; return; }
+    if (item === "緑甲羅3") {
+        for (let i = 0; i < 3; i++) {
+            setTimeout(() => {
+                const sm = new THREE.Mesh(new THREE.SphereGeometry(1.5, 8, 8), new THREE.MeshStandardMaterial({ color: 0x33cc33 }));
+                sm.position.copy(npc.mesh.position).y += 0.5;
+                const dir = new THREE.Vector3(-Math.sin(npc.mesh.rotation.y), 0, -Math.cos(npc.mesh.rotation.y)).normalize();
+                sm.position.addScaledVector(dir, 4.0 + i * 2);
+                scene.add(sm);
+                shells.push({ mesh: sm, dir: dir, type: "green", life: 250, velocityY: 0 });
+            }, i * 150);
+        }
+        showShellWarning("🟢 ライバルが緑甲羅3連射！", "#33cc33");
+        return;
+    }
+    if (item === "赤甲羅3") {
+        for (let i = 0; i < 3; i++) {
+            setTimeout(() => {
+                const sm = new THREE.Mesh(new THREE.SphereGeometry(1.5, 8, 8), new THREE.MeshStandardMaterial({ color: 0xff3333 }));
+                sm.position.copy(npc.mesh.position).y += 0.5;
+                scene.add(sm);
+                let target = npcs[Math.floor(Math.random() * npcs.length)];
+                shells.push({ mesh: sm, type: "red", targetNpc: target, life: 400, velocityY: 0 });
+            }, i * 150);
+        }
+        showShellWarning("🔴 ライバルが赤甲羅3連射！", "#ff3333");
+        return;
+    }
+
+    if (item === "キノコ" || item === "金キノコ" || item === "デカキノコ" || item === "スター") {
+        npc.boostTimer = 100; if (item === "デカキノコ") npc.isMega = 200; if (item === "スター") npc.isStar = 200;
+    } else if (item === "緑甲羅") {
+        const sm = new THREE.Mesh(new THREE.SphereGeometry(1.5, 8, 8), new THREE.MeshStandardMaterial({ color: 0x33cc33 }));
+        sm.position.copy(npc.mesh.position).y += 0.5;
+        const dir = new THREE.Vector3(-Math.sin(npc.mesh.rotation.y), 0, -Math.cos(npc.mesh.rotation.y)).normalize();
+        sm.position.addScaledVector(dir, 4.0); scene.add(sm); shells.push({ mesh: sm, dir: dir, type: "green", life: 250, velocityY: 0 });
+        showShellWarning("⚠️ ライバルが緑甲羅を発射！", "#33cc33");
+    } else if (item === "赤甲羅") {
+        const sm = new THREE.Mesh(new THREE.SphereGeometry(1.5, 8, 8), new THREE.MeshStandardMaterial({ color: 0xff3333 }));
+        sm.position.copy(npc.mesh.position).y += 0.5; scene.add(sm);
+        if (Math.random() < 0.4) {
+            shells.push({ mesh: sm, type: "red_to_player", life: 350, velocityY: 0 });
+            showShellWarning("🔴 ライバルが赤甲羅を発射！", "#ff3333");
+        } else {
+            let target = npcs[Math.floor(Math.random() * npcs.length)];
+            shells.push({ mesh: sm, type: "red", targetNpc: target, life: 400, velocityY: 0 });
+        }
+    } else if (item === "青甲羅") {
+        const sm = new THREE.Mesh(new THREE.SphereGeometry(1.5, 8, 8), new THREE.MeshStandardMaterial({ color: 0x0066ff }));
+        sm.position.copy(npc.mesh.position).y += 0.5;
+        scene.add(sm);
+        soundBlueShell();
+        let target = null;
+        let playerProg = playerLap + playerProgress;
+        let npcProgs = npcs.map(n => n.lap + n.progress);
+        let maxProg = Math.max(playerProg, ...npcProgs);
+        if (playerProg === maxProg) {
+            target = carGroup;
+            showShellWarning("💙 ライバルが青甲羅を発射！", "#0066ff");
+        } else {
+            let topNpc = npcs.find(n => n.lap + n.progress === maxProg);
+            if (topNpc) target = topNpc.mesh;
+        }
+        if (!target) target = npcs[0].mesh;
+        shells.push({
+            mesh: sm,
+            type: "blue",
+            target: target,
+            phase: "ascend",
+            height: 0,
+            targetY: 20,
+            speed: 3.5,
+            life: 1500,
+            velocityY: 0,
+            startPos: npc.mesh.position.clone(),
+            exploded: false,
+            fixedX: 0,
+            fixedZ: 0
+        });
+    } else if (item === "サンダー") {
+        if (itemMegaTimer <= 0 && itemStarTimer <= 0 && playerHitInvincibleTimer <= 0) {
+            isSquishedTimer = 120; speed = 0; turboTimer = 0; isDrifting = false; driftCharge = 0; turboState = 0; itemMushroomTimer = 0; itemGoldenTimer = 0; soundHit();
+            dropPlayerItems();
+            dropCoins();
+            playerHitInvincibleTimer = 180;
+            const tx = document.getElementById("turbo-ui"); tx.innerText = "⚡ ライバルのサンダーを喰らった！！コインとアイテムを失った！ ⚡"; tx.style.color = "#bb33ff";
+        } else {
+            const tx = document.getElementById("turbo-ui"); tx.innerText = "🛡️ 無敵判定によりライバルのサンダーを完全無効化した！ 🛡️"; tx.style.color = "#ffff00";
+        }
+        npcs.forEach(other => { if (other !== npc && other.isMega <= 0 && other.isStar <= 0) { dropNpcItems(other); other.isSquished = 120; other.boostTimer = 0; } });
+    }
 }
 
 const carPos = carGroup.position;
 
+function createExplosion(pos) {
+    const sphereGeo = new THREE.SphereGeometry(6, 32, 16);
+    const sphereMat = new THREE.MeshBasicMaterial({
+        color: 0xffcc00,
+        transparent: true,
+        opacity: 0.9,
+        side: THREE.DoubleSide,
+        depthWrite: false
+    });
+    const dome = new THREE.Mesh(sphereGeo, sphereMat);
+    dome.position.set(pos.x, 4, pos.z);
+    dome.scale.y = 0.6;
+    scene.add(dome);
+    explosions.push({ mesh: dome, life: 1.0, isDome: true });
+
+    const ringMat = new THREE.MeshBasicMaterial({ color: 0xffaa00, transparent: true, opacity: 0.6, side: THREE.DoubleSide, depthWrite: false });
+    const ring = new THREE.Mesh(new THREE.RingGeometry(0.5, 8, 48), ringMat);
+    ring.position.set(pos.x, 0.1, pos.z);
+    ring.rotation.x = -Math.PI / 2;
+    scene.add(ring);
+    explosions.push({ mesh: ring, life: 0.8, isDome: false });
+
+    const light = new THREE.PointLight(0xffaa00, 10, 40);
+    light.position.set(pos.x, 5, pos.z);
+    scene.add(light);
+    setTimeout(() => scene.remove(light), 300);
+}
+
+
+// ---------- メインアニメーション ----------
 function animate() {
     requestAnimationFrame(animate);
     const turboText = document.getElementById("turbo-ui");
@@ -1165,31 +1359,48 @@ function animate() {
     const rankText = document.getElementById("rank-text");
     const lapText = document.getElementById("lap-text");
     const countdownEl = document.getElementById("countdown");
-    const npcStatusEl = document.getElementById("npc-status");
+    const warningEl = document.getElementById("warning-text");
+
+    updateBombCharge();
+
+    if (tripleItemCount > 0 && tripleItemInSlot1 && tripleItemSprites.length > 0 && heldItems[0] === tripleItemType) {
+        tripleItemAngle += 0.04;
+        const radius = 3.5;
+        for (let i = 0; i < tripleItemSprites.length; i++) {
+            const sprite = tripleItemSprites[i];
+            const angle = tripleItemAngle + (i * (Math.PI * 2 / Math.max(tripleItemSprites.length, 1)));
+            sprite.position.set(Math.cos(angle) * radius, 1.2, Math.sin(angle) * radius);
+            sprite.scale.set(3.5, 3.5, 1);
+        }
+    }
+
+    if (warningTimer > 0) {
+        warningTimer--;
+        warningEl.textContent = warningMessage;
+        warningEl.style.color = warningColor;
+    } else {
+        warningEl.textContent = "";
+    }
 
     gearGroup.rotation.z += 0.008; alertLight.intensity = Math.sin(Date.now() * 0.01) * 0.8 + 0.8;
 
     if (playerHitInvincibleTimer > 0) playerHitInvincibleTimer--;
 
-// ============================================================
-// 📷 カメラ制御（Zキー反転対応・確実版）
-// ============================================================
-const camDist = 18;
-const camHeight = 8;
+    cameraFlipCurrent += (cameraFlipTarget - cameraFlipCurrent) * 0.08;
+    if (Math.abs(cameraFlipCurrent - cameraFlipTarget) < 0.001) {
+        cameraFlipCurrent = cameraFlipTarget;
+    }
 
-if (cameraFlipped) {
-    // 後方視点
-    camera.position.x = carPos.x + Math.sin(carGroup.rotation.y) * camDist;
-    camera.position.z = carPos.z + Math.cos(carGroup.rotation.y) * camDist;
-    camera.position.y = camHeight;
-    camera.lookAt(carPos.x, 0, carPos.z);
-} else {
-    // ノーマル視点
-    camera.position.x = carPos.x - Math.sin(carGroup.rotation.y) * camDist;
-    camera.position.z = carPos.z - Math.cos(carGroup.rotation.y) * camDist;
-    camera.position.y = camHeight;
-    camera.lookAt(carPos.x, 0, carPos.z);
-}
+    let camOffsetX = isDrifting ? -driftDir * 5.0 : 0;
+    let relativeCameraOffset = keys.s ? new THREE.Vector3(camOffsetX, 6.0, -15) : new THREE.Vector3(camOffsetX, 6.0, 15);
+
+    let rotatedOffset = relativeCameraOffset.clone();
+    rotatedOffset.x = relativeCameraOffset.x * Math.cos(cameraFlipCurrent) - relativeCameraOffset.z * Math.sin(cameraFlipCurrent);
+    rotatedOffset.z = relativeCameraOffset.x * Math.sin(cameraFlipCurrent) + relativeCameraOffset.z * Math.cos(cameraFlipCurrent);
+
+    const targetCameraOffset = rotatedOffset.applyMatrix4(carGroup.matrixWorld);
+    currentCameraPos.lerp(targetCameraOffset, 0.08); camera.position.copy(currentCameraPos);
+    camera.lookAt(new THREE.Vector3(carPos.x, carPos.y + 1.2, carPos.z));
 
     let inEntryZone = (carPos.x > -entryZoneGeo.parameters.width/2 && carPos.x < entryZoneGeo.parameters.width/2 && carPos.z > 80 && carPos.z < 140);
 
@@ -1216,54 +1427,563 @@ if (cameraFlipped) {
         if (centerUiTimer > 0) { centerUiTimer -= 16.66; if (centerUiTimer <= 0) countdownEl.innerText = ""; }
     }
 
-    // 甲羅処理
+    // ---- 爆発エフェクト更新 ----
+    for (let i = explosions.length - 1; i >= 0; i--) {
+        const exp = explosions[i];
+        exp.life -= 0.025;
+        const scale = 1 + (1 - exp.life) * 3.0;
+        if (exp.isDome) {
+            exp.mesh.scale.set(scale, scale * 0.6, scale);
+        } else {
+            exp.mesh.scale.set(scale, scale, scale);
+        }
+        exp.mesh.material.opacity = Math.max(0, exp.life * 0.9);
+        if (exp.life <= 0) {
+            scene.remove(exp.mesh);
+            explosions.splice(i, 1);
+        }
+    }
+
+    // ---- ファイヤーフラワー火の玉更新 ----
+    if (fireballCooldown > 0) fireballCooldown--;
+
+    for (let i = fireballs.length - 1; i >= 0; i--) {
+        const fb = fireballs[i];
+        fb.life--;
+
+        fb.mesh.position.x += fb.direction.x * fb.speed;
+        fb.mesh.position.z += fb.direction.z * fb.speed;
+
+        if (fb.trail && fb.trail.length > 0) {
+            fb.trailCounter = (fb.trailCounter + 1) % 3;
+            if (fb.trailCounter === 0) {
+                const t = fb.trail.shift();
+                t.position.copy(fb.mesh.position);
+                t.visible = true;
+                t.material.opacity = 0.6;
+                fb.trail.push(t);
+            }
+            fb.trail.forEach((t, idx) => {
+                t.material.opacity *= 0.94;
+                if (t.material.opacity < 0.01) t.visible = false;
+            });
+        }
+
+        const bx = fb.mesh.position.x;
+        const bz = fb.mesh.position.z;
+        if ((bx < -370 || bx > 370 || bz < -470 || bz > 470) && fb.bounces < fb.maxBounces) {
+            if (bx < -370 || bx > 370) fb.direction.x *= -1;
+            if (bz < -470 || bz > 470) fb.direction.z *= -1;
+            fb.bounces++;
+            fb.mesh.position.x = Math.max(-369, Math.min(369, bx));
+            fb.mesh.position.z = Math.max(-469, Math.min(469, bz));
+        }
+
+        let shouldRemove = false;
+
+        if (fb.life <= 0) {
+            shouldRemove = true;
+        }
+
+        if (!shouldRemove) {
+            for (let j = 0; j < npcs.length; j++) {
+                const npc = npcs[j];
+                const dist = fb.mesh.position.distanceTo(npc.mesh.position);
+                if (dist < 3.5) {
+                    if (fb.isNpc && fb.ownerNpc === npc) continue;
+                    if (npc.isStar > 0 || npc.isMega > 0) continue;
+
+                    if (npc.heldItem === "緑甲羅" || npc.heldItem === "赤甲羅") {
+                        if (npc.heldItem) {
+                            spawnDroppedItem(npc.heldItem, npc.mesh.position);
+                            npc.heldItem = null;
+                        }
+                        showShellWarning("🔥 ファイヤーフラワーがガードを破壊！", "#ff6600");
+                        shouldRemove = true;
+                        break;
+                    }
+
+                    npc.isSquished = 150;
+                    npc.boostTimer = 0;
+                    const npcCoinDrop = Math.floor(Math.random() * 2) + 1;
+                    for (let c = 0; c < npcCoinDrop; c++) {
+                        spawnDroppedItem("コイン", npc.mesh.position);
+                    }
+                    soundHit();
+                    turboText.innerText = `🔥 火の玉がライバルに命中！ 🔥`;
+                    turboText.style.color = "#ff6600";
+                    shouldRemove = true;
+                    break;
+                }
+            }
+        }
+
+        if (!shouldRemove && fb.isNpc) {
+            const distToPlayer = fb.mesh.position.distanceTo(carGroup.position);
+            if (distToPlayer < 3.5) {
+                if (itemStarTimer > 0 || itemMegaTimer > 0 || itemBulletTimer > 0) {
+                    turboText.innerText = "🛡️ 無敵状態で火の玉を無効化！ 🛡️";
+                    turboText.style.color = "#ffff00";
+                    shouldRemove = true;
+                } else {
+                    if (isItemShielding && shieldShellMesh) {
+                        carGroup.remove(shieldShellMesh);
+                        shieldShellMesh = null;
+                        isItemShielding = false;
+                        if (heldItems[0]) {
+                            spawnDroppedItem(heldItems[0], carGroup.position);
+                            heldItems[0] = null;
+                        }
+                        showShellWarning("🔥 ファイヤーフラワーがガードを破壊！", "#ff6600");
+                        shouldRemove = true;
+                    } else if (playerHitInvincibleTimer <= 0) {
+                        isSquishedTimer = 150;
+                        speed = 0;
+                        turboTimer = 0;
+                        isDrifting = false;
+                        driftCharge = 0;
+                        turboState = 0;
+                        itemMushroomTimer = 0;
+                        itemGoldenTimer = 0;
+                        playerHitInvincibleTimer = 180;
+                        dropCoins();
+                        soundHit();
+                        turboText.innerText = "🔥 ライバルの火の玉を喰らった！ 🔥";
+                        turboText.style.color = "#ff4400";
+                        showShellWarning("🔥 火の玉被弾！", "#ff4400");
+                        shouldRemove = true;
+                    }
+                }
+            }
+        }
+
+        if (shouldRemove) {
+            const smallExp = new THREE.Mesh(
+                new THREE.SphereGeometry(1.5, 12, 12),
+                new THREE.MeshBasicMaterial({ color: 0xff6600, transparent: true, opacity: 0.8 })
+            );
+            smallExp.position.copy(fb.mesh.position);
+            smallExp.position.y = 0.3;
+            scene.add(smallExp);
+            setTimeout(() => scene.remove(smallExp), 200);
+
+            scene.remove(fb.mesh);
+            if (fb.trail) {
+                fb.trail.forEach(t => scene.remove(t));
+            }
+            fireballs.splice(i, 1);
+        }
+    }
+
+    // ---- ブーメラン更新 ----
+    for (let i = boomerangs.length - 1; i >= 0; i--) {
+        const b = boomerangs[i];
+        b.life--;
+        b.angle += 0.4;
+        b.mesh.rotation.y = b.angle;
+
+        const ownerPos = b.owner.position ? b.owner.position : b.owner.mesh.position;
+
+        if (b.phase === "out") {
+            b.mesh.position.x += b.direction.x * b.speed;
+            b.mesh.position.z += b.direction.z * b.speed;
+
+            const distFromOwner = b.mesh.position.distanceTo(ownerPos);
+            if (distFromOwner > 50 || b.life < 240) {
+                b.phase = "return";
+                const returnDir = new THREE.Vector3()
+                    .subVectors(ownerPos, b.mesh.position)
+                    .normalize();
+                b.direction.copy(returnDir);
+            }
+        } else {
+            const toOwner = new THREE.Vector3()
+                .subVectors(ownerPos, b.mesh.position)
+                .normalize();
+            b.direction.copy(toOwner);
+            b.mesh.position.x += b.direction.x * b.returnSpeed;
+            b.mesh.position.z += b.direction.z * b.returnSpeed;
+
+            const distToOwner = b.mesh.position.distanceTo(ownerPos);
+            if (distToOwner < 3.0) {
+                if (!b.isNpc) {
+                    boomerangTotalReturns++;
+                    if (boomerangTotalReturns < 5) {
+                        if (!heldItems[0]) {
+                            heldItems[0] = "ブーメラン";
+                            updateItemUI();
+                            turboText.innerText = `🪃 ブーメランが戻った！ (${boomerangTotalReturns + 1}/5回目)`;
+                            turboText.style.color = "#44ddff";
+                        }
+                        b.phase = "out";
+                        let ownerRot = b.owner.rotation ? b.owner.rotation.y : 0;
+                        const newDir = new THREE.Vector3(-Math.sin(ownerRot), 0, -Math.cos(ownerRot)).normalize();
+                        b.direction.copy(newDir);
+                        b.mesh.position.copy(ownerPos);
+                        b.mesh.position.x += b.direction.x * 2.0;
+                        b.mesh.position.z += b.direction.z * 2.0;
+                        b.hitTargets = new Set();
+                        b.life = 300;
+                    } else {
+                        turboText.innerText = "🪃 ブーメランを使い切った！ (5/5)";
+                        turboText.style.color = "#44ddff";
+                        scene.remove(b.mesh);
+                        boomerangs.splice(i, 1);
+                        boomerangActive = false;
+                        continue;
+                    }
+                } else {
+                    scene.remove(b.mesh);
+                    boomerangs.splice(i, 1);
+                    continue;
+                }
+            }
+        }
+
+        // 命中判定（NPC）
+        if (!b.isNpc) {
+            for (let j = 0; j < npcs.length; j++) {
+                const npc = npcs[j];
+                if (b.hitTargets.has(npc)) continue;
+                const dist = b.mesh.position.distanceTo(npc.mesh.position);
+                if (dist < 3.5) {
+                    if (npc.isStar > 0 || npc.isMega > 0) continue;
+
+                    if (npc.heldItem === "緑甲羅" || npc.heldItem === "赤甲羅") {
+                        if (npc.heldItem) {
+                            spawnDroppedItem(npc.heldItem, npc.mesh.position);
+                            npc.heldItem = null;
+                        }
+                        showShellWarning("🪃 ブーメランがガードを破壊！", "#44ddff");
+                        b.phase = "return";
+                        const returnDir = new THREE.Vector3()
+                            .subVectors(ownerPos, b.mesh.position)
+                            .normalize();
+                        b.direction.copy(returnDir);
+                        b.hitTargets.add(npc);
+                        break;
+                    }
+
+                    npc.isSquished = 120;
+                    npc.boostTimer = 0;
+                    const npcCoinDrop = Math.floor(Math.random() * 1) + 1;
+                    for (let c = 0; c < npcCoinDrop; c++) {
+                        spawnDroppedItem("コイン", npc.mesh.position);
+                    }
+                    soundHit();
+                    turboText.innerText = `🪃 ブーメランがライバルに命中！ 🪃`;
+                    turboText.style.color = "#44ddff";
+                    b.hitTargets.add(npc);
+                    b.phase = "return";
+                    const returnDir = new THREE.Vector3()
+                        .subVectors(ownerPos, b.mesh.position)
+                        .normalize();
+                    b.direction.copy(returnDir);
+                    break;
+                }
+            }
+        } else {
+            const distToPlayer = b.mesh.position.distanceTo(carGroup.position);
+            if (distToPlayer < 3.5 && !b.hitTargets.has("player")) {
+                if (itemStarTimer > 0 || itemMegaTimer > 0 || itemBulletTimer > 0) {
+                    turboText.innerText = "🛡️ 無敵状態でブーメランを無効化！ 🛡️";
+                    turboText.style.color = "#ffff00";
+                } else {
+                    if (isItemShielding && shieldShellMesh) {
+                        carGroup.remove(shieldShellMesh);
+                        shieldShellMesh = null;
+                        isItemShielding = false;
+                        if (heldItems[0]) {
+                            spawnDroppedItem(heldItems[0], carGroup.position);
+                            heldItems[0] = null;
+                        }
+                        showShellWarning("🪃 ブーメランがガードを破壊！", "#44ddff");
+                        b.phase = "return";
+                        const returnDir = new THREE.Vector3()
+                            .subVectors(ownerPos, b.mesh.position)
+                            .normalize();
+                        b.direction.copy(returnDir);
+                        b.hitTargets.add("player");
+                        continue;
+                    }
+
+                    if (playerHitInvincibleTimer <= 0) {
+                        isSquishedTimer = 120;
+                        speed = 0;
+                        turboTimer = 0;
+                        isDrifting = false;
+                        driftCharge = 0;
+                        turboState = 0;
+                        itemMushroomTimer = 0;
+                        itemGoldenTimer = 0;
+                        playerHitInvincibleTimer = 180;
+                        dropCoins();
+                        soundHit();
+                        turboText.innerText = "🪃 ライバルのブーメランを喰らった！ 🪃";
+                        turboText.style.color = "#44ddff";
+                        showShellWarning("🪃 ブーメラン被弾！", "#44ddff");
+                    }
+                }
+                b.hitTargets.add("player");
+                b.phase = "return";
+                const returnDir = new THREE.Vector3()
+                    .subVectors(ownerPos, b.mesh.position)
+                    .normalize();
+                b.direction.copy(returnDir);
+            }
+        }
+
+        if (b.life <= 0) {
+            scene.remove(b.mesh);
+            boomerangs.splice(i, 1);
+            boomerangActive = false;
+        }
+    }
+
+    // ---- ボム兵更新 ----
+    for (let i = bombs.length - 1; i >= 0; i--) {
+        const bomb = bombs[i];
+        bomb.life--;
+
+        const spd = bomb.speedMul || 3.0;
+        bomb.mesh.position.x += bomb.direction.x * spd;
+        bomb.mesh.position.z += bomb.direction.z * spd;
+        bomb.velocityY -= 0.04;
+        bomb.mesh.position.y += bomb.velocityY;
+
+        if (bomb.mesh.position.y < 0) {
+            bomb.mesh.position.y = 0;
+            bomb.velocityY = 0;
+        }
+
+        if (bomb.life <= 0 || bomb.mesh.position.y <= 0) {
+            if (!bomb.exploded) {
+                bomb.exploded = true;
+                const pos = bomb.mesh.position.clone();
+                createExplosion(pos);
+                soundHit();
+
+                const radius = 25;
+                const distToPlayer = pos.distanceTo(carGroup.position);
+                if (distToPlayer < radius) {
+                    if (itemStarTimer > 0 || itemMegaTimer > 0 || itemBulletTimer > 0) {
+                        turboText.innerText = "🛡️ 無敵状態で爆発を無効化！ 🛡️";
+                        turboText.style.color = "#ffff00";
+                    } else if (isItemShielding && shieldShellMesh) {
+                        turboText.innerText = "🛡️ ガードで爆発を防いだ！ 🛡️";
+                        turboText.style.color = "#00ff88";
+                        showShellWarning("🛡️ ボム兵爆発をガード！", "#00ff88");
+                    } else if (playerHitInvincibleTimer <= 0) {
+                        isSquishedTimer = 120;
+                        speed = 0;
+                        turboTimer = 0;
+                        isDrifting = false;
+                        driftCharge = 0;
+                        turboState = 0;
+                        itemMushroomTimer = 0;
+                        itemGoldenTimer = 0;
+                        playerHitInvincibleTimer = 180;
+                        dropCoins();
+                        dropCoins();
+                        turboText.innerText = "💥 ボム兵の爆発を喰らった！コインを2枚失った！ 💥";
+                        turboText.style.color = "#ff8800";
+                        showShellWarning("💥 ボム兵爆発被弾！", "#ff8800");
+                    }
+                }
+
+                npcs.forEach(npc => {
+                    const d = pos.distanceTo(npc.mesh.position);
+                    if (d < radius) {
+                        if (npc.isMega <= 0 && npc.isStar <= 0) {
+                            npc.isSquished = 180;
+                            npc.boostTimer = 0;
+                            const npcCoinDrop = Math.floor(Math.random() * 2) + 1;
+                            for (let c = 0; c < npcCoinDrop; c++) {
+                                spawnDroppedItem("コイン", npc.mesh.position);
+                            }
+                        }
+                    }
+                });
+            }
+            scene.remove(bomb.mesh);
+            bombs.splice(i, 1);
+        }
+
+        if (bomb.mesh.children.length > 0) {
+            const fuse = bomb.mesh.children[0];
+            if (fuse) {
+                fuse.material.color.setHSL((Date.now() * 0.02) % 1, 1, 0.5);
+                fuse.scale.set(
+                    1 + Math.sin(Date.now() * 0.1) * 0.3,
+                    1 + Math.sin(Date.now() * 0.1 + 1) * 0.3,
+                    1 + Math.sin(Date.now() * 0.1 + 2) * 0.3
+                );
+            }
+        }
+    }
+
+    // ---------- 甲羅処理 ----------
     for (let i = shells.length - 1; i >= 0; i--) {
-        const shell = shells[i]; const sSpeed = 3.5; shell.life--;
+        const shell = shells[i];
+        shell.life--;
+
+        if (shell.type !== "blue") {
+            shell.velocityY = (shell.velocityY || 0) - 0.02;
+            shell.mesh.position.y += shell.velocityY;
+            if (shell.mesh.position.y < 0) {
+                shell.mesh.position.y = 0;
+                shell.velocityY = 0;
+            }
+        }
+
         if (shell.type === "green") {
-            shell.mesh.position.addScaledVector(shell.dir, sSpeed); shell.mesh.rotation.y += 0.1;
-        } else if (shell.type === "red" && shell.targetNpc) {
+            shell.mesh.position.addScaledVector(shell.dir, 3.5);
+            shell.mesh.rotation.y += 0.1;
+        }
+        else if (shell.type === "red" && shell.targetNpc) {
             const tPos = shell.targetNpc.mesh.position;
             const sDir = new THREE.Vector3().subVectors(tPos, shell.mesh.position); sDir.y = 0; sDir.normalize();
-            shell.mesh.position.addScaledVector(sDir, sSpeed); shell.mesh.lookAt(tPos.x, shell.mesh.position.y, tPos.z);
-        } else if (shell.type === "red_to_player") {
+            shell.mesh.position.addScaledVector(sDir, 3.5);
+            shell.mesh.lookAt(tPos.x, shell.mesh.position.y, tPos.z);
+        }
+        else if (shell.type === "red_to_player") {
             const tPos = carGroup.position;
             const sDir = new THREE.Vector3().subVectors(tPos, shell.mesh.position); sDir.y = 0; sDir.normalize();
-            shell.mesh.position.addScaledVector(sDir, sSpeed); shell.mesh.lookAt(tPos.x, shell.mesh.position.y, tPos.z);
+            shell.mesh.position.addScaledVector(sDir, 3.5);
+            shell.mesh.lookAt(tPos.x, shell.mesh.position.y, tPos.z);
             if (shell.mesh.position.distanceTo(carGroup.position) < 5.5) {
                 if (isItemShielding) {
                     isItemShielding = false; if (shieldShellMesh) { carGroup.remove(shieldShellMesh); shieldShellMesh = null; }
                     heldItems[0] = heldItems[1]; heldItems[1] = null; updateItemUI(); soundHit();
                     turboText.innerText = "🛡️ ガード成功！後ろの甲羅で防いだ！ 🛡️"; turboText.style.color = "#00ff00";
-                } else if (itemMegaTimer <= 0 && itemStarTimer <= 0 && itemBooTimer <= 0 && itemBulletTimer <= 0) { 
+                    showShellWarning("🛡️ 甲羅ガード成功！", "#00ff88");
+                } else if (itemMegaTimer <= 0 && itemStarTimer <= 0 && itemBulletTimer <= 0) {
                     if (playerHitInvincibleTimer > 0) {
                         turboText.innerText = "🛡️ 被弾無敵バリアにより甲羅を弾き飛ばした！ 🛡️"; turboText.style.color = "#33ffff";
                     } else {
-                        isSquishedTimer = 90; speed = 0; turboTimer = 0; isDrifting = false; driftCharge = 0; turboState = 0; itemMushroomTimer = 0; itemGoldenTimer = 0; 
-                        playerHitInvincibleTimer = 180; 
-                        soundHit(); 
+                        isSquishedTimer = 90; speed = 0; turboTimer = 0; isDrifting = false; driftCharge = 0; turboState = 0; itemMushroomTimer = 0; itemGoldenTimer = 0;
+                        playerHitInvincibleTimer = 180;
+                        soundHit();
                         dropCoins();
                         turboText.innerText = "💥 被弾！赤甲羅を喰らった！！ 💥"; turboText.style.color = "#ff3333";
+                        showShellWarning("🔴 赤甲羅被弾！", "#ff3333");
                     }
                 } else { turboText.innerText = "🛡️ 無敵状態で甲羅を粉砕！ 🛡️"; turboText.style.color = "#ffff00"; }
                 shell.life = 0;
             }
         }
-        let hasHit = false;
-        if (shell.type !== "red_to_player") {
-            for (let j = 0; j < npcs.length; j++) {
-                const npc = npcs[j];
-                if (shell.mesh.position.distanceTo(npc.mesh.position) < 5.5) { 
-                    if (npc.isMega <= 0 && npc.isStar <= 0) { npc.isSquished = 120; npc.boostTimer = 0; }
-                    hasHit = true; soundHit(); turboText.innerText = `🎯 甲羅がライバルに命中！ 🎯`; turboText.style.color = "#00ff00"; break; 
+        else if (shell.type === "blue") {
+            if (!shell.target || shell.exploded) {
+                shell.life = 0;
+                continue;
+            }
+
+            let targetPos = shell.target.position ? shell.target.position : shell.target.mesh.position;
+            if (!targetPos) { shell.life = 0; continue; }
+
+            if (shell.phase === "ascend") {
+                let dx = targetPos.x - shell.mesh.position.x;
+                let dz = targetPos.z - shell.mesh.position.z;
+                let dist = Math.sqrt(dx*dx + dz*dz);
+                if (dist > 1.5) {
+                    let move = Math.min(dist, shell.speed * 0.8);
+                    shell.mesh.position.x += (dx / dist) * move;
+                    shell.mesh.position.z += (dz / dist) * move;
+                }
+                shell.height += 0.6;
+                shell.mesh.position.y = shell.height;
+                if (shell.height >= shell.targetY) {
+                    shell.phase = "descend";
+                    shell.velocityY = 0.5;
+                    shell.fixedX = targetPos.x;
+                    shell.fixedZ = targetPos.z;
+                }
+            } else if (shell.phase === "descend") {
+                if (shell.target) {
+                    let tPos = shell.target.position ? shell.target.position : shell.target.mesh.position;
+                    if (tPos) {
+                        let dx = tPos.x - shell.fixedX;
+                        let dz = tPos.z - shell.fixedZ;
+                        let dist = Math.sqrt(dx*dx + dz*dz);
+                        let maxMove = shell.speed * 0.6;
+                        if (dist > 0.1) {
+                            let move = Math.min(dist, maxMove);
+                            shell.fixedX += (dx / dist) * move;
+                            shell.fixedZ += (dz / dist) * move;
+                        }
+                    }
+                }
+                shell.mesh.position.x = shell.fixedX;
+                shell.mesh.position.z = shell.fixedZ;
+                shell.velocityY -= 0.08;
+                shell.mesh.position.y += shell.velocityY;
+
+                if (shell.mesh.position.y <= 0) {
+                    shell.mesh.position.y = 0;
+                    createExplosion(shell.mesh.position);
+                    soundHit();
+
+                    const radius = 35;
+                    let distToPlayer = shell.mesh.position.distanceTo(carGroup.position);
+                    if (distToPlayer < radius) {
+                        let hasDefense = (itemMushroomTimer > 0 || itemStarTimer > 0 || itemMegaTimer > 0);
+                        if (hasDefense) {
+                            turboText.innerText = "🛡️ 防御アイテムで青甲羅爆発を無効化！ 🛡️"; turboText.style.color = "#00ff88";
+                        } else if (playerHitInvincibleTimer > 0) {
+                            turboText.innerText = "🛡️ 無敵バリアで青甲羅爆発を防いだ！ 🛡️"; turboText.style.color = "#33ffff";
+                        } else {
+                            isSquishedTimer = 90;
+                            speed = 0;
+                            turboTimer = 0;
+                            isDrifting = false;
+                            driftCharge = 0;
+                            turboState = 0;
+                            itemMushroomTimer = 0;
+                            itemGoldenTimer = 0;
+                            playerHitInvincibleTimer = 180;
+                            dropCoins();
+                            turboText.innerText = "💥💙 青甲羅爆発で強制停止！動けなくなった！ 💙💥"; turboText.style.color = "#ff0066";
+                            showShellWarning("💙 青甲羅爆発被弾！強制停止！", "#0066ff");
+                        }
+                    }
+
+                    npcs.forEach(npc => {
+                        if (shell.mesh.position.distanceTo(npc.mesh.position) < radius) {
+                            if (npc.isMega <= 0 && npc.isStar <= 0) {
+                                npc.isSquished = 90;
+                                npc.boostTimer = 0;
+                                dropNpcItems(npc);
+                            }
+                        }
+                    });
+
+                    scene.remove(shell.mesh);
+                    shells.splice(i, 1);
+                    continue;
                 }
             }
         }
-        if (hasHit || shell.life <= 0 || shell.mesh.position.length() > 5000) { scene.remove(shell.mesh); shells.splice(i, 1); }
+
+        let hasHit = false;
+        if (shell.type !== "red_to_player" && shell.type !== "blue") {
+            for (let j = 0; j < npcs.length; j++) {
+                const npc = npcs[j];
+                if (shell.mesh.position.distanceTo(npc.mesh.position) < 5.5) {
+                    if (npc.isMega <= 0 && npc.isStar <= 0) { npc.isSquished = 120; npc.boostTimer = 0; }
+                    hasHit = true; soundHit(); turboText.innerText = `🎯 甲羅がライバルに命中！ 🎯`; turboText.style.color = "#00ff00"; break;
+                }
+            }
+        }
+
+        if (hasHit || shell.life <= 0 || shell.mesh.position.length() > 5000) {
+            scene.remove(shell.mesh);
+            shells.splice(i, 1);
+        }
     }
 
-    // ドロップアイテム回収
+    // ---------- ドロップアイテム回収 ----------
     for (let i = droppedItems.length - 1; i >= 0; i--) {
-        const dItem = droppedItems[i]; dItem.timer--; dItem.mesh.position.y = 2.0 + Math.sin(Date.now() * 0.007) * 0.4; 
+        const dItem = droppedItems[i]; dItem.timer--; dItem.mesh.position.y = 2.0 + Math.sin(Date.now() * 0.007) * 0.4;
         const distXZ = Math.sqrt(Math.pow(carGroup.position.x - dItem.mesh.position.x, 2) + Math.pow(carGroup.position.z - dItem.mesh.position.z, 2));
 
         if (distXZ < 4.5) {
@@ -1275,7 +1995,7 @@ if (cameraFlipped) {
             }
             if (!isItemRoulette) {
                 soundItem();
-                if (!heldItems[0]) { heldItems[0] = dItem.type; updateItemUI(); scene.remove(dItem.mesh); droppedItems.splice(i, 1); continue; } 
+                if (!heldItems[0]) { heldItems[0] = dItem.type; updateItemUI(); scene.remove(dItem.mesh); droppedItems.splice(i, 1); continue; }
                 else if (!heldItems[1]) { heldItems[1] = dItem.type; updateItemUI(); scene.remove(dItem.mesh); droppedItems.splice(i, 1); continue; }
             }
         }
@@ -1291,7 +2011,7 @@ if (cameraFlipped) {
         if (dItem.timer <= 0) { scene.remove(dItem.mesh); droppedItems.splice(i, 1); }
     }
 
-    // コイン回収
+    // 🪙 コイン回収
     coinsArray.forEach(c => {
         if (!c.collected) {
             c.mesh.rotation.z = Math.sin(Date.now() * 0.005) * 0.15;
@@ -1307,38 +2027,63 @@ if (cameraFlipped) {
         }
     });
 
+    // 各種タイマー
     if (itemGoldenTimer > 0) { itemGoldenTimer--; if (itemGoldenTimer % 10 === 0) updateItemUI(); if (itemGoldenTimer <= 0) { updateItemUI(); turboText.innerText = ""; } }
     if (itemStarTimer > 0) { itemStarTimer--; if (itemStarTimer % 10 === 0) updateItemUI(); if (itemStarTimer <= 0) { updateItemUI(); turboText.innerText = ""; } }
-    if (itemBooTimer > 0) { itemBooTimer--; if (itemBooTimer % 10 === 0) updateItemUI(); if (itemBooTimer <= 0) { updateItemUI(); turboText.innerText = ""; } }
     if (itemBulletTimer > 0) { itemBulletTimer--; if (itemBulletTimer % 10 === 0) updateItemUI(); }
 
+    // ---- ルーレット（アイテムボックス） ----
     if (isItemRoulette) {
-        rouletteTimer -= 16.66; const randomItemStr = "🎲 " + getEmojiForItem(itemTypes[Math.floor(Math.random() * itemTypes.length)]);
-        if (rouletteSlot === 0) document.getElementById("item-slot-1").innerHTML = randomItemStr;
-        else if (rouletteSlot === 1) document.getElementById("item-slot-2").innerHTML = randomItemStr;
-        if (rouletteTimer <= 0) { 
-            isItemRoulette = false; 
-            soundItem(); 
-            let newItem = getRandomItemByRank(getPlayerRank()); 
-            let targetSlot = rouletteSlot;
-            if (heldItems[targetSlot]) { targetSlot = (targetSlot === 0) ? 1 : 0; }
-            if (!heldItems[targetSlot]) {
-                heldItems[targetSlot] = newItem; 
+        rouletteTimer -= 16.66;
+        const randomItemStr = "🎲 " + getEmojiForItem(itemTypes[Math.floor(Math.random() * itemTypes.length)]);
+        document.getElementById("item-slot-1").innerHTML = randomItemStr;
+
+        if (rouletteTimer <= 0) {
+            isItemRoulette = false;
+            soundItem();
+            let newItem = getRandomItemByRank(getPlayerRank());
+
+            if (newItem === "ファイヤーフラワー") {
+                fireFlowerAmmo = 8;
+            }
+            if (newItem === "ブーメラン") {
+                boomerangTotalReturns = 0;
+            }
+            
+            // ★ 3連アイテム（現在の実装：上書きされるバグあり）
+            if (isTripleItem(newItem)) {
+                if (!heldItems[0]) {
+                    heldItems[0] = newItem;
+                    createTripleItems(newItem);
+                } else if (!heldItems[1]) {
+                    heldItems[1] = newItem;
+                    setTripleItemInSlot2(newItem);
+                } else {
+                    spawnDroppedItem(newItem, carGroup.position);
+                }
+                updateItemUI();
+                rouletteSlot = -1;
+                return;
+            }
+
+            if (!heldItems[0]) {
+                heldItems[0] = newItem;
+            } else if (!heldItems[1]) {
+                heldItems[1] = newItem;
             } else {
                 spawnDroppedItem(newItem, carGroup.position);
             }
-            rouletteSlot = -1; 
-            updateItemUI(); 
+            rouletteSlot = -1;
+            updateItemUI();
         }
     }
 
     if (poleSpinTimer > 0) {
         poleSpinTimer--; isDrifting = false; isWallRiding = false;
-        carModel.rotation.y += 0.4; 
+        carModel.rotation.y += 0.4;
         turboText.innerText = "🌀 ブルーポールトリック成功！！！ 🌀"; turboText.style.color = "#0055ff";
-
         if (poleSpinTimer === 0) {
-            carModel.rotation.set(0,0,0); 
+            carModel.rotation.set(0,0,0);
             turboTimer = 35; speed = 2.3; soundBoost();
             turboText.innerText = "✨🏁 ポール着地ブースト発動！ 🏁✨"; turboText.style.color = "#ffeb3b";
         }
@@ -1347,24 +2092,19 @@ if (cameraFlipped) {
     if (itemStarTimer > 0) {
         npcs.forEach(npc => {
             if (carGroup.position.distanceTo(npc.mesh.position) < 8.0 && npc.isSquished <= 0 && npc.isStar <= 0 && npc.isMega <= 0) {
-                npc.isSquished = 120; npc.boostTimer = 0; 
+                npc.isSquished = 120; npc.boostTimer = 0;
                 soundHit();
                 turboText.innerText = "⭐ スター体当たり！ライバルをブッ飛ばした！ ⭐"; turboText.style.color = "#ffff00";
             }
         });
     }
 
-    // 表示エフェクト
+    // エフェクト
     if (itemStarTimer > 0) {
         sparkLeft.material.visible = true; sparkRight.material.visible = true;
         sparkLeft.material.color.setHSL((Date.now() * 0.006) % 1, 1, 0.5); sparkRight.material.color.setHSL((Date.now() * 0.006) % 1, 1, 0.5);
         carModel.material.color.setHSL((Date.now() * 0.015) % 1, 1, 0.6);
         carModel.material.transparent = false; carModel.material.opacity = 1.0;
-    } else if (itemBooTimer > 0) {
-        sparkLeft.material.visible = false; sparkRight.material.visible = false;
-        carModel.material.color.setHex(0xffffff);
-        carModel.material.transparent = true;
-        carModel.material.opacity = 0.35;
     } else if (itemBulletTimer > 0) {
         sparkLeft.material.visible = true; sparkRight.material.visible = true;
         sparkLeft.material.color.setHex(0xff3333); sparkRight.material.color.setHex(0xff3333);
@@ -1372,7 +2112,6 @@ if (cameraFlipped) {
         carModel.material.transparent = false; carModel.material.opacity = 1.0;
     } else {
         carModel.material.color.setHex(0xffd700);
-        
         if (playerHitInvincibleTimer > 0) {
             carModel.material.transparent = true;
             carModel.material.opacity = (Math.floor(Date.now() / 60) % 2 === 0) ? 0.3 : 0.9;
@@ -1383,7 +2122,7 @@ if (cameraFlipped) {
 
         if (poleSpinTimer > 0) {
             sparkLeft.material.visible = true; sparkRight.material.visible = true;
-            sparkLeft.material.color.setHex(0x0055ff); sparkRight.material.color.setHex(0x0055ff); 
+            sparkLeft.material.color.setHex(0x0055ff); sparkRight.material.color.setHex(0x0055ff);
         } else if (keys[" "] && jumpChargeTime > 0 && carY <= 0.15) {
             sparkLeft.material.visible = true; sparkRight.material.visible = true;
             let chargeRatio = Math.min(jumpChargeTime / 50, 1.0);
@@ -1398,8 +2137,8 @@ if (cameraFlipped) {
             }
         } else if (isDrifting && carY <= (insideFloor.position.y + 0.2)) {
             sparkLeft.material.visible = true; sparkRight.material.visible = true;
-            if (driftCharge > 100) { sparkLeft.material.color.setHex(0x00ffff); sparkRight.material.color.setHex(0x00ffff); } 
-            else if (driftCharge > 40) { sparkLeft.material.color.setHex(0xffaa00); sparkRight.material.color.setHex(0xffaa00); } 
+            if (driftCharge > 100) { sparkLeft.material.color.setHex(0x00ffff); sparkRight.material.color.setHex(0x00ffff); }
+            else if (driftCharge > 40) { sparkLeft.material.color.setHex(0xffaa00); sparkRight.material.color.setHex(0xffaa00); }
             else { sparkLeft.material.color.setHex(0xff3333); sparkRight.material.color.setHex(0xff3333); }
         } else if (turboTimer > 0) {
             sparkLeft.material.visible = true; sparkRight.material.visible = true;
@@ -1410,36 +2149,36 @@ if (cameraFlipped) {
     // エリア判定
     let areaStatus = "";
     let inFactory = (carPos.x > LEFT_WALL_X - 5 && carPos.x < RIGHT_WALL_X + 5 && carPos.z > -150 && carPos.z < 50);
-    if (inFactory) { areaStatus = "【🏭 工場エリア】"; scene.background.lerp(new THREE.Color(0x111116), 0.1); dirLight.intensity = 0.1; } 
+    if (inFactory) { areaStatus = "【🏭 工場エリア】"; scene.background.lerp(new THREE.Color(0x111116), 0.1); dirLight.intensity = 0.1; }
     else { areaStatus = "【🏎️ サーキットコース】"; scene.background.lerp(new THREE.Color(0x557799), 0.1); dirLight.intensity = 0.8; }
 
     // 壁走り
-    let padding = 2.0; 
+    let padding = 2.0;
     if (wallKickIgnoreTimer > 0) wallKickIgnoreTimer--;
-    
+
     if (inFactory && wallKickIgnoreTimer === 0 && poleSpinTimer <= 0 && itemBulletTimer <= 0) {
         if (carY > 0.5 && !isWallRiding && Math.abs(wallKickVelocityX) < 0.3) {
             let entered = false;
-            if (carPos.x >= RIGHT_WALL_X - padding - 1.5) { isWallRiding = true; wallRideSide = 1; jumpVelocity = 0; entered = true; } 
+            if (carPos.x >= RIGHT_WALL_X - padding - 1.5) { isWallRiding = true; wallRideSide = 1; jumpVelocity = 0; entered = true; }
             else if (carPos.x <= LEFT_WALL_X + padding + 1.5) { isWallRiding = true; wallRideSide = -1; jumpVelocity = 0; entered = true; }
             if (entered) {
                 speed = Math.max(speed, baseMaxSpeed);
-                carGroup.rotation.y = (Math.cos(carGroup.rotation.y) > 0) ? 0 : Math.PI; 
+                carGroup.rotation.y = (Math.cos(carGroup.rotation.y) > 0) ? 0 : Math.PI;
             }
         }
     } else { isWallRiding = false; }
 
     if (isWallRiding && inFactory) {
         areaStatus = "🧱 WALL RIDING !! 🧱"; if (carY < 6.0) carY = THREE.MathUtils.lerp(carY, 7.0, 0.1);
-        wallKickVelocityX = 0; 
-        if (wallRideSide === 1) { carPos.x = RIGHT_WALL_X - padding; carModel.rotation.z = -Math.PI / 2; } 
+        wallKickVelocityX = 0;
+        if (wallRideSide === 1) { carPos.x = RIGHT_WALL_X - padding; carModel.rotation.z = -Math.PI / 2; }
         else { carPos.x = LEFT_WALL_X + padding; carModel.rotation.z = Math.PI / 2; }
-        carGroup.rotation.y = (Math.cos(carGroup.rotation.y) > 0) ? 0 : Math.PI; 
+        carGroup.rotation.y = (Math.cos(carGroup.rotation.y) > 0) ? 0 : Math.PI;
         if (carPos.z <= -148 || carPos.z >= 48 || Math.abs(speed) < 0.2) isWallRiding = false;
     } else if (poleSpinTimer <= 0 && itemBulletTimer <= 0) {
-        if (jumpActionTimer <= 0) { 
-            if (Math.abs(wallKickVelocityX) > 0.1) carModel.rotation.z += 0.22 * Math.sign(wallKickVelocityX); 
-            else carModel.rotation.z = THREE.MathUtils.lerp(carModel.rotation.z, 0, 0.2); 
+        if (jumpActionTimer <= 0) {
+            if (Math.abs(wallKickVelocityX) > 0.1) carModel.rotation.z += 0.22 * Math.sign(wallKickVelocityX);
+            else carModel.rotation.z = THREE.MathUtils.lerp(carModel.rotation.z, 0, 0.2);
         }
         carPos.x += wallKickVelocityX; wallKickVelocityX *= 0.90;
         if (inFactory) {
@@ -1448,27 +2187,34 @@ if (cameraFlipped) {
         }
     }
 
-    // アイテムボックス判定
+    // アイテムボックス
     itemBoxes.forEach(box => {
         box.mesh.rotation.y += 0.03;
-        if (box.respawnTimer > 0) { box.respawnTimer--; if (box.respawnTimer === 0) box.mesh.visible = true; } 
+        if (box.respawnTimer > 0) { box.respawnTimer--; if (box.respawnTimer === 0) box.mesh.visible = true; }
         else if (box.mesh.visible) {
             if (carPos.distanceTo(box.mesh.position) < 8) {
+                if (heldItems[0] !== null && heldItems[1] !== null) {
+                    box.mesh.visible = false; box.respawnTimer = 300;
+                    soundItem();
+                    return;
+                }
+
                 box.mesh.visible = false; box.respawnTimer = 300;
                 if (!isItemRoulette && itemBulletTimer <= 0) {
                     soundItem();
-                    if (!heldItems[0]) { isItemRoulette = true; rouletteSlot = 0; rouletteTimer = 1000; } 
-                    else if (!heldItems[1]) { isItemRoulette = true; rouletteSlot = 1; rouletteTimer = 1000; }
+                    isItemRoulette = true;
+                    rouletteSlot = 0;
+                    rouletteTimer = 1000;
                 }
             } else {
                 for (let j = 0; j < npcs.length; j++) {
                     if (npcs[j].mesh.position.distanceTo(box.mesh.position) < 14) {
                         box.mesh.visible = false; box.respawnTimer = 300;
-                        if (!npcs[j].heldItem && npcs[j].boostTimer <= 0) { 
-                            let npcItem = getRandomItemByRank(getNpcRank(npcs[j]));
+                        if (!npcs[j].heldItem && npcs[j].boostTimer <= 0) {
+                            let npcItem = itemTypes[Math.floor(Math.random() * itemTypes.length)];
                             if (npcItem === "サンダー" && Math.random() > 0.15) { npcItem = "キノコ"; }
-                            npcs[j].heldItem = npcItem; 
-                            npcs[j].itemUseTimer = Math.floor(Math.random() * 60) + 20; 
+                            npcs[j].heldItem = npcItem;
+                            npcs[j].itemUseTimer = Math.floor(Math.random() * 60) + 20;
                         }
                         break;
                     }
@@ -1480,40 +2226,33 @@ if (cameraFlipped) {
     if (isSquishedTimer > 0) { isSquishedTimer--; carGroup.scale.set(1.6, 0.08, 1.6); if (isSquishedTimer === 0) carGroup.scale.set(1, 1, 1); }
     if (itemMegaTimer > 0) { itemMegaTimer--; carGroup.scale.set(2.5, 2.5, 2.5); if (itemMegaTimer === 0) carGroup.scale.set(1, 1, 1); }
 
-    // 物理計算
-    let maxSpeed = baseMaxSpeed * (1.0 + (coins * 0.005)); 
+    let maxSpeed = baseMaxSpeed * (1.0 + (coins * 0.005));
     let accel = 0.04; let decel = 0.015;
     let isWaterOn = false; let targetBaseY = 0; let onRoad = false;
-    
-    if (carPos.x > -40 && carPos.x < 40 && carPos.z > -150 && carPos.z < 350) onRoad = true; 
-    if (carPos.x > -340 && carPos.x < 40 && carPos.z > -240 && carPos.z < -160) onRoad = true; 
-    if (carPos.x > -340 && carPos.x < -260 && carPos.z > -440 && carPos.z < -160) onRoad = true; 
-    if (carPos.x > -340 && carPos.x < -100 && carPos.z > -440 && carPos.z < -360) onRoad = true; 
-    
+
+    if (carPos.x > -40 && carPos.x < 40 && carPos.z > -150 && carPos.z < 350) onRoad = true;
+    if (carPos.x > -340 && carPos.x < 40 && carPos.z > -240 && carPos.z < -160) onRoad = true;
+    if (carPos.x > -340 && carPos.x < -260 && carPos.z > -440 && carPos.z < -160) onRoad = true;
+    if (carPos.x > -340 && carPos.x < -100 && carPos.z > -440 && carPos.z < -360) onRoad = true;
+
     let inPoolZone = (carPos.x >= -80 && carPos.x <= 330 && carPos.z > -460 && carPos.z < -340);
     if (inPoolZone) {
         onRoad = true;
         let onB1 = (carPos.x >= -25 && carPos.x <= 25); let onB2 = (carPos.x >= 100 && carPos.x <= 150); let onB3 = (carPos.x >= 225 && carPos.x <= 275);
-        if (onB1 || onB2 || onB3 || carPos.x > 300) { targetBaseY = 0.0; areaStatus = "【🌉 プールの一本橋】"; } 
-        else { targetBaseY = -1.0; if (carY <= -0.8 && itemMushroomTimer <= 0 && itemGoldenTimer <= 0 && itemStarTimer <= 0 && itemBooTimer <= 0 && itemBulletTimer <= 0) { areaStatus = "【🌊 プール水没減速】"; maxSpeed = 0.45; accel = 0.01; isWaterOn = true; } }
+        if (onB1 || onB2 || onB3 || carPos.x > 300) { targetBaseY = 0.0; areaStatus = "【🌉 プールの一本橋】"; }
+        else { targetBaseY = -1.0; if (carY <= -0.8 && itemMushroomTimer <= 0 && itemGoldenTimer <= 0 && itemStarTimer <= 0 && itemBulletTimer <= 0) { areaStatus = "【🌊 プール水没減速】"; maxSpeed = 0.45; accel = 0.01; isWaterOn = true; } }
     }
 
-    if (carPos.x > 310 && carPos.x < 390 && carPos.z > -440 && carPos.z < -60) onRoad = true; 
-    if (carPos.x > 160 && carPos.x < 390 && carPos.z > -140 && carPos.z < -60) onRoad = true; 
-    if (carPos.x > 160 && carPos.x < 240 && carPos.z > -140 && carPos.z < 290) onRoad = true; 
-    if (carPos.x > -40 && carPos.x < 240 && carPos.z > 210 && carPos.z < 290) onRoad = true; 
+    if (carPos.x > 310 && carPos.x < 390 && carPos.z > -440 && carPos.z < -60) onRoad = true;
+    if (carPos.x > 160 && carPos.x < 390 && carPos.z > -140 && carPos.z < -60) onRoad = true;
+    if (carPos.x > 160 && carPos.x < 240 && carPos.z > -140 && carPos.z < 290) onRoad = true;
+    if (carPos.x > -40 && carPos.x < 240 && carPos.z > 210 && carPos.z < 290) onRoad = true;
 
-    let isDirt = (raceState === 2 && !onRoad && carY <= targetBaseY + 0.1 && itemMushroomTimer <= 0 && itemMegaTimer <= 0 && itemGoldenTimer <= 0 && itemStarTimer <= 0 && itemBooTimer <= 0 && itemBulletTimer <= 0);
+    let isDirt = (raceState === 2 && !onRoad && carY <= targetBaseY + 0.1 && itemMushroomTimer <= 0 && itemMegaTimer <= 0 && itemGoldenTimer <= 0 && itemStarTimer <= 0 && itemBulletTimer <= 0);
     if (isDirt) {
         areaStatus = "【🟫 泥エリア！ダート超減速中】";
         maxSpeed = 0.15; accel = 0.005;
-        if (turboTimer > 0) turboTimer = 0; 
-    }
-    
-    if (itemBooTimer > 0) {
-        areaStatus = "【👻 テレサ無敵・ダート無視中】";
-        maxSpeed = baseMaxSpeed * 1.25;
-        accel = 0.08;
+        if (turboTimer > 0) turboTimer = 0;
     }
 
     if (itemBulletTimer > 0) {
@@ -1526,54 +2265,50 @@ if (cameraFlipped) {
     if (carPos.x > 10 && carPos.x < 30 && Math.abs(carPos.z - smallRamp1.position.z) < 20 && carY <= targetBaseY + 0.15) { jumpVelocity = 0.55; speed = Math.max(speed, 2.4); hasJumpActioned = false; soundBoost(); turboText.innerText = "💨 小ジャンプ！ 💨"; turboText.style.color = "#ff8800"; }
     if (carPos.x > 135 && carPos.x < 155 && Math.abs(carPos.z - smallRamp2.position.z) < 20 && carY <= targetBaseY + 0.15) { jumpVelocity = 0.55; speed = Math.max(speed, 2.4); hasJumpActioned = false; soundBoost(); turboText.innerText = "💨 小ジャンプ！ 💨"; turboText.style.color = "#ff8800"; }
 
-    if (jumpActionTimer > 0) { 
-        jumpActionTimer--; 
-        carModel.rotation.y += 0.35; 
+    if (jumpActionTimer > 0) {
+        jumpActionTimer--;
+        carModel.rotation.y += 0.35;
         carModel.rotation.x += jumpRotX;
         carModel.rotation.z += jumpRotZ;
-        if (jumpActionTimer === 0) carModel.rotation.set(0, 0, 0); 
+        if (jumpActionTimer === 0) carModel.rotation.set(0, 0, 0);
     }
 
     if (!isWallRiding && itemBulletTimer <= 0) {
-        if (carY > targetBaseY || jumpVelocity > 0) { 
-            carY += jumpVelocity; jumpVelocity -= 0.022; 
-            if (carY < targetBaseY) { 
-                carY = targetBaseY; jumpVelocity = 0; 
-                if (wallKickCount > 0) { 
+        if (carY > targetBaseY || jumpVelocity > 0) {
+            carY += jumpVelocity; jumpVelocity -= 0.022;
+            if (carY < targetBaseY) {
+                carY = targetBaseY; jumpVelocity = 0;
+                if (wallKickCount > 0) {
                     turboTimer = 15 + (wallKickCount * 12);
                     turboText.innerText = `💨 着地ブースト！ [壁キック:${wallKickCount}回] 💨`;
                     turboText.style.color = "#00ff66";
-                    wallKickCount = 0; hasJumpActioned = false; soundBoost(); 
+                    wallKickCount = 0; hasJumpActioned = false; soundBoost();
                 } else if (hasJumpActioned) {
                     turboTimer = pendingChargeTurbo; speed = Math.max(speed, pendingChargeSpeed);
                     turboText.innerText = pendingChargeMsg; turboText.style.color = pendingChargeColor;
                     soundBoost();
                     hasJumpActioned = false;
                 }
-            } 
-        } 
+            }
+        }
         else { carY = THREE.MathUtils.lerp(carY, targetBaseY, 0.2); }
     }
-    
-    if (itemBulletTimer <= 0) {
-        carGroup.position.y = carY;
-    }
+
+    carGroup.position.y = carY;
 
     if (keys[" "] && carY <= 0.15 && isSquishedTimer <= 0 && itemBulletTimer <= 0 && !isWallRiding && poleSpinTimer <= 0) {
         jumpChargeTime = Math.min(jumpChargeTime + 1, 60);
     }
 
-    // スピード制御
-    if (raceState === 1 || isSquishedTimer > 0) { speed = 0; } 
+    if (raceState === 1 || isSquishedTimer > 0) { speed = 0; }
     else if (poleSpinTimer > 0) { speed = Math.max(speed, 1.8); }
     else if (itemBulletTimer > 0) { }
     else if (isWallRiding) { }
-    else if (itemMushroomTimer > 0) { itemMushroomTimer--; speed = 3.0; } 
-    else if (itemGoldenTimer > 0) { speed = 3.0; } 
-    else if (itemStarTimer > 0) { speed = 2.8; } 
-    else if (itemBooTimer > 0) { speed = 2.5; }
+    else if (itemMushroomTimer > 0) { itemMushroomTimer--; speed = 3.0; }
+    else if (itemGoldenTimer > 0) { speed = 3.0; }
+    else if (itemStarTimer > 0) { speed = 2.8; }
     else if (turboTimer > 0) { turboTimer--; speed = Math.max(speed, 2.3); }
-    else if (turboTimer < 0) { turboTimer++; speed = 0; } 
+    else if (turboTimer < 0) { turboTimer++; speed = 0; }
     else {
         if (keys.w) speed = Math.min(speed + accel, maxSpeed);
         else if (keys.s) speed = Math.max(speed - accel, -maxSpeed / 2);
@@ -1589,35 +2324,29 @@ if (cameraFlipped) {
         turboState = 0; driftCharge = 0;
     }
 
-    if (isWallRiding) { turnAngle = 0; } 
+    if (isWallRiding) { turnAngle = 0; }
     else if (isDrifting && carY <= targetBaseY + 0.1 && poleSpinTimer <= 0) {
         let driftSteer = driftDir === 1 ? (keys.d ? 1.5 : (keys.a ? 0.3 : 0.8)) : (keys.a ? 1.5 : (keys.d ? 0.3 : 0.8));
         turnAngle = -0.024 * driftDir * driftSteer; driftCharge += driftSteer * 2.5;
         if (driftCharge > 100) { turboState = 2; } else if (driftCharge > 40) { turboState = 1; } else { turboState = 0; }
-    } else if (poleSpinTimer <= 0 && itemBulletTimer <= 0) { 
-        if (Math.abs(speed) > 0.01 && raceState !== 1) { let sens = isWallRiding ? 0.012 : 0.034; if (keys.a) turnAngle = sens * (speed > 0 ? 1 : -1); if (keys.d) turnAngle = -sens * (speed > 0 ? 1 : -1); } 
+    } else if (poleSpinTimer <= 0 && itemBulletTimer <= 0) {
+        if (Math.abs(speed) > 0.01 && raceState !== 1) { let sens = isWallRiding ? 0.012 : 0.034; if (keys.a) turnAngle = sens * (speed > 0 ? 1 : -1); if (keys.d) turnAngle = -sens * (speed > 0 ? 1 : -1); }
     }
-    
+
     if (raceState !== 1) {
         let forwardVector = new THREE.Vector3(-Math.sin(carGroup.rotation.y), 0, -Math.cos(carGroup.rotation.y)).normalize();
         if (itemBulletTimer > 0) {
-            bulletProgress += 0.0038; 
+            bulletProgress += 0.0038;
             if (bulletProgress >= 1) { bulletProgress -= 1; playerLap++; if (playerLap > 20) { isFinished = true; raceState = 3; } }
-            
             let p = bulletProgress;
             let segment = Math.floor(p * NODE_COUNT); let segmentPercent = (p * NODE_COUNT) % 1;
             let startNode = npcPathNodes[segment % NODE_COUNT]; let endNode = npcPathNodes[(segment + 1) % NODE_COUNT];
-            
             let targetX = startNode.x + (endNode.x - startNode.x) * segmentPercent;
             let targetZ = startNode.z + (endNode.z - startNode.z) * segmentPercent;
-            
             carGroup.position.set(targetX, 0.4, targetZ);
-            
             let angle = Math.atan2(endNode.x - startNode.x, endNode.z - startNode.z);
             carGroup.rotation.y = angle;
-            
-            carGroup.scale.set(1.8, 1.8, 2.5); 
-
+            carGroup.scale.set(1.8, 1.8, 2.5);
             npcs.forEach(npc => {
                 if (carGroup.position.distanceTo(npc.mesh.position) < 14.0 && npc.isSquished <= 0) {
                     npc.isSquished = 150;
@@ -1627,32 +2356,30 @@ if (cameraFlipped) {
                     turboText.style.color = "#ff1111";
                 }
             });
-
             if (itemBulletTimer === 0) {
                 carGroup.scale.set(1, 1, 1);
                 carModel.material.color.setHex(0xffd700);
-                carGroup.rotation.y = angle; 
-                turboTimer = 50; 
-                speed = 2.4; 
+                carGroup.rotation.y = angle;
+                turboTimer = 50;
+                speed = 2.4;
             }
         } else {
             if (poleSpinTimer <= 0) { carGroup.rotation.y += turnAngle; }
             forwardVector = new THREE.Vector3(-Math.sin(carGroup.rotation.y), 0, -Math.cos(carGroup.rotation.y)).normalize();
             carGroup.position.addScaledVector(forwardVector, speed);
         }
-        
+
         if (raceState === 2) {
-            if (carPos.z < -300 && carPos.x > -100) midCheckpointPassed = true; 
+            if (carPos.z < -300 && carPos.x > -100) midCheckpointPassed = true;
             if (midCheckpointPassed && Math.abs(carPos.x) < 40 && carPos.z > 40 && carPos.z < 62 && forwardVector.z < 0) {
-                midCheckpointPassed = false; 
-                if (!isFinished) { 
-                    playerLap++; 
+                midCheckpointPassed = false;
+                if (!isFinished) {
+                    playerLap++;
                     coinsArray.forEach(c => { c.mesh.visible = true; c.collected = false; });
-                    if (playerLap > 20) { isFinished = true; raceState = 3; } 
+                    if (playerLap > 20) { isFinished = true; raceState = 3; }
                 }
             }
             lapText.innerText = isFinished ? "Lap: FINISHED" : `Lap: ${playerLap}/20`;
-            
             let myRank = getPlayerRank();
             rankText.innerText = `順位: ${myRank}位 / 12`;
         }
@@ -1660,128 +2387,40 @@ if (cameraFlipped) {
 
     // NPC更新
     npcs.forEach((npc, index) => {
-        if (raceState === 2) { 
+        if (raceState === 2) {
             let nSpeed = baseMaxSpeed / totalTrackLength;
-            
             let playerProgressVal = playerLap + playerProgress;
             let npcProgressVal = npc.lap + npc.progress;
-            let diff = playerProgressVal - npcProgressVal;
-            let diffFactor = 1.0 + Math.max(-0.3, Math.min(0.3, diff * 0.5));
-            nSpeed *= diffFactor;
-            
-            if (npc.isSquished > 0) { 
-                npc.isSquished--; 
-                nSpeed = 0.00015; 
-                npc.mesh.scale.set(1.5, 0.1, 1.5); 
-            } else { 
-                npc.mesh.scale.set(1, 1, 1); 
-                if (npc.boostTimer > 0) { 
-                    npc.boostTimer--; 
-                    nSpeed = (baseMaxSpeed * 1.25) / totalTrackLength; 
-                } 
+            if (npcProgressVal < playerProgressVal) {
+                nSpeed += 0.0002;
             }
-            
-            updateNpcState(npc);
-            nSpeed = updateNpcMovement(npc, nSpeed);
-            updateNpcItemStrategy(npc);
-            
+            if (npc.isSquished > 0) { npc.isSquished--; nSpeed = 0.00015; npc.mesh.scale.set(1.5, 0.1, 1.5); }
+            else { npc.mesh.scale.set(1, 1, 1); if (npc.boostTimer > 0) { npc.boostTimer--; nSpeed = (baseMaxSpeed * 1.25) / totalTrackLength; } }
             if (npc.isStar > 0) {
                 npc.isStar--;
-                if (npc.mesh.position.distanceTo(carGroup.position) < 7.0 && 
-                    itemStarTimer <= 0 && itemMegaTimer <= 0 && itemBooTimer <= 0 && 
-                    isSquishedTimer <= 0 && playerHitInvincibleTimer <= 0) {
-                    isSquishedTimer = 60; speed = 0; turboTimer = 0; 
-                    isDrifting = false; driftCharge = 0; turboState = 0; 
-                    itemMushroomTimer = 0; itemGoldenTimer = 0;
-                    playerHitInvincibleTimer = 180; 
-                    soundHit(); 
+                if (npc.mesh.position.distanceTo(carGroup.position) < 7.0 && itemStarTimer <= 0 && itemMegaTimer <= 0 && isSquishedTimer <= 0 && playerHitInvincibleTimer <= 0) {
+                    isSquishedTimer = 60; speed = 0; turboTimer = 0; isDrifting = false; driftCharge = 0; turboState = 0; itemMushroomTimer = 0; itemGoldenTimer = 0;
+                    playerHitInvincibleTimer = 180;
+                    soundHit();
                     dropCoins();
-                    turboText.innerText = "💥 スター状態のライバルにハネ飛ばされた！！コインを失った！ 💥";
-                    turboText.style.color = "#ff3333";
+                    turboText.innerText = "💥 スター状態のライバルにハネ飛ばされた！！コインを失った！ 💥"; turboText.style.color = "#ff3333";
                 }
             }
-            
-            npc.progress += nSpeed; 
-            if (npc.progress >= 1) { npc.progress -= 1; npc.lap++; }
-            
-            if (npc.heldItem) { 
-                npc.itemUseTimer--; 
-                if (npc.itemUseTimer <= 0) { 
-                    useNpcItem(npc); 
-                } 
-            }
+            npc.progress += nSpeed; if (npc.progress >= 1) { npc.progress -= 1; npc.lap++; }
+            if (npc.heldItem) { npc.itemUseTimer--; if (npc.itemUseTimer <= 0) { useNpcItem(npc); } }
         }
-        
         let p = Math.max(0, npc.progress);
-        let segment = Math.floor(p * NODE_COUNT); 
-        let segmentPercent = (p * NODE_COUNT) % 1;
-        let startNode = npcPathNodes[segment % NODE_COUNT]; 
-        let endNode = npcPathNodes[(segment + 1) % NODE_COUNT];
-        
-        let baseX = startNode.x + (endNode.x - startNode.x) * segmentPercent;
-        let baseZ = startNode.z + (endNode.z - startNode.z) * segmentPercent;
-        
-        let offsetX = 0;
-        let offsetZ = 0;
-        if (Math.abs(npc.targetOffset) > 0.1) {
-            const angle = Math.atan2(endNode.x - startNode.x, endNode.z - startNode.z);
-            offsetX = -Math.cos(angle) * npc.targetOffset;
-            offsetZ = Math.sin(angle) * npc.targetOffset;
-        }
-        
-        const laneOffset = ((index % 2 === 0) ? 5 : -5);
-        
-        npc.mesh.position.set(
-            baseX + offsetX + ((index % 2 === 0) ? 5 : -5),
-            0,
-            baseZ + offsetZ + ((index % 2 === 0) ? 5 : -5)
-        );
-        
-        if(npc.isMega > 0) { 
-            npc.isMega--; 
-            npc.mesh.scale.set(2.3, 2.3, 2.3); 
-        }
-        if(npc.isStar > 0) {
-            npc.mesh.scale.set(1.5, 1.5, 1.5);
-        }
-        
+        let segment = Math.floor(p * NODE_COUNT); let segmentPercent = (p * NODE_COUNT) % 1;
+        let startNode = npcPathNodes[segment % NODE_COUNT]; let endNode = npcPathNodes[(segment + 1) % NODE_COUNT];
+        npc.mesh.position.set(startNode.x + (endNode.x - startNode.x) * segmentPercent, 0, startNode.z + (endNode.z - startNode.z) * segmentPercent + ((index%2===0)?5:-5));
+        if(npc.isMega > 0) { npc.isMega--; npc.mesh.scale.set(2.3, 2.3, 2.3); }
         npc.mesh.lookAt(endNode.x, 0, endNode.z);
-        
-        if (npc.boostTimer > 0 || npc.state === NPC_STATE.SLIPSTREAM || npc.state === NPC_STATE.BOOSTING) {
-            npc.sparkLeft.visible = true;
-            npc.sparkRight.visible = true;
-            npc.sparkLeft.material.color.setHex(0x00ffff);
-            npc.sparkRight.material.color.setHex(0x00ffff);
-        } else {
-            npc.sparkLeft.visible = false;
-            npc.sparkRight.visible = false;
-        }
     });
-    
-    if (raceState === 2) {
-        let statusTextLines = "NPCステータス:\n";
-        npcs.slice(0, 5).forEach((npc, i) => {
-            const stateStr = npc.state === NPC_STATE.NORMAL ? '通常' :
-                            npc.state === NPC_STATE.AVOIDING ? '回避' :
-                            npc.state === NPC_STATE.SLIPSTREAM ? 'スリップ' :
-                            npc.state === NPC_STATE.OVERTAKING ? '追い抜き' :
-                            npc.state === NPC_STATE.BLOCKING ? 'ブロック' :
-                            npc.state === NPC_STATE.BOOSTING ? 'ブースト' : '???';
-            const rank = getNpcRank(npc);
-            statusTextLines += `#${i+1} ${stateStr} 順位${rank}位\n`;
-        });
-        npcStatusEl.innerText = statusTextLines;
-    }
 
     renderer.render(scene, camera);
 }
 
-window.addEventListener('resize', () => { 
-    camera.aspect = window.innerWidth / window.innerHeight; 
-    camera.updateProjectionMatrix(); 
-    renderer.setSize(window.innerWidth, window.innerHeight); 
-});
-
+window.addEventListener('resize', () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
 animate();
 </script>
 </body>
