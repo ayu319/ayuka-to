@@ -1,0 +1,3015 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>悪いよカート (カメック改)</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #000; font-family: sans-serif; }
+        #ui-container {
+            position: absolute; top: 15px; left: 15px; color: white; font-weight: bold;
+            background: rgba(0,0,0,0.65); padding: 12px 16px; border-radius: 10px; pointer-events: none;
+            z-index: 10; font-size: 15px; min-width: 160px;
+        }
+        #rank-text { font-size: 26px; color: #ffeb3b; }
+        #lap-text { font-size: 18px; margin-top: 2px; }
+        #coin-text { font-size: 18px; color: #fff33f; margin-top: 2px; }
+        #hp-text { font-size: 18px; color: #ff4444; margin-top: 2px; display: none; }
+        #status-text { font-size: 13px; color: #ffeb3b; margin-top: 2px; }
+        #warning-text {
+            font-size: 18px;
+            margin-top: 4px;
+            text-shadow: 0 0 15px currentColor;
+            font-weight: bold;
+            min-height: 26px;
+            transition: color 0.1s;
+        }
+        #time-display { font-size: 22px; color: #44ff88; margin-top: 2px; display: none; }
+        #best-time-display { font-size: 16px; color: #ffaa44; margin-top: 2px; display: none; }
+        #countdown {
+            position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%);
+            font-size: 72px; font-weight: bold; color: #fff; text-shadow: 4px 4px 0px #000;
+            pointer-events: none; text-align: center; z-index: 10; width: 80%;
+        }
+        #turbo-ui {
+            position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
+            font-size: 24px; font-weight: bold; color: #fff; text-shadow: 2px 2px 4px #000;
+            text-align: center; pointer-events: none; z-index: 10;
+            background: rgba(0,0,0,0.5); padding: 4px 16px; border-radius: 20px;
+        }
+        /* ★ アイテムスロット */
+        #item-slots {
+            position: absolute; bottom: 90px; left: 50%; transform: translateX(-50%);
+            display: flex; gap: 16px; z-index: 10;
+            pointer-events: none;
+        }
+        .item-slot {
+            width: 80px; height: 80px;
+            background: rgba(0,0,0,0.7);
+            border: 2px solid rgba(255,255,255,0.3);
+            border-radius: 12px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            color: #aaa;
+            text-align: center;
+            pointer-events: none;
+            backdrop-filter: blur(4px);
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+            transition: border-color 0.3s;
+        }
+        .item-slot.has-item {
+            border-color: #ffd700;
+            box-shadow: 0 0 30px rgba(255,215,0,0.2);
+        }
+        .item-slot .slot-emoji { font-size: 32px; line-height: 1.2; }
+        .item-slot .slot-label { font-size: 11px; color: #888; margin-top: 2px; }
+        .item-slot .slot-sub { font-size: 10px; color: #666; }
+        #slot-1 { border-color: rgba(255,200,0,0.5); }
+        #slot-2 { border-color: rgba(0,200,255,0.5); }
+        #slot-1.has-item { border-color: #ffd700; }
+        #slot-2.has-item { border-color: #00ccff; }
+        #slot-1 .slot-label { color: #ffd700; }
+        #slot-2 .slot-label { color: #00ccff; }
+
+        /* ★ ステータス表示 (右下) */
+        #status-effects {
+            position: absolute; bottom: 160px; right: 20px;
+            color: white; font-size: 16px; font-weight: bold;
+            text-align: right; z-index: 10;
+            pointer-events: none;
+            text-shadow: 0 0 10px rgba(0,0,0,0.8);
+            background: rgba(0,0,0,0.5); padding: 8px 14px; border-radius: 10px;
+            border: 1px solid rgba(255,255,255,0.1);
+            min-width: 120px;
+            display: none;
+        }
+        #status-effects .effect-item {
+            padding: 2px 0;
+            font-size: 15px;
+        }
+        #status-effects .effect-item .emoji { margin-right: 6px; }
+
+        /* ★ ヒットポップアップ */
+        #hit-popup {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            font-size: 48px; font-weight: bold;
+            color: #fff; text-shadow: 0 0 30px rgba(255,255,255,0.5), 0 0 60px rgba(255,255,255,0.3);
+            pointer-events: none; z-index: 30;
+            text-align: center;
+            opacity: 0;
+            transition: none;
+            font-family: sans-serif;
+        }
+        #hit-popup .sub {
+            font-size: 24px;
+            opacity: 0.8;
+            margin-top: 4px;
+        }
+
+        /* ★ アイテム設定パネル (ホーム画面) */
+        #item-config-panel-home {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            justify-content: center;
+            margin-top: 14px;
+            padding: 12px 16px;
+            background: rgba(255,255,255,0.06);
+            border-radius: 14px;
+            border: 1px solid rgba(255,255,255,0.1);
+            max-width: 600px;
+        }
+        #item-config-panel-home .config-label {
+            color: #aaa;
+            font-size: 12px;
+            font-weight: bold;
+            width: 100%;
+            text-align: center;
+            margin-bottom: 2px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+        .config-item-btn {
+            width: 52px;
+            height: 52px;
+            border-radius: 8px;
+            border: 3px solid;
+            font-size: 20px;
+            font-weight: bold;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transition: all 0.15s ease;
+            box-shadow: 0 0 10px rgba(0,0,0,0.5);
+            background: rgba(0,0,0,0.3);
+            user-select: none;
+        }
+        .config-item-btn.on {
+            border-color: #00ccff;
+            background: rgba(0,200,255,0.2);
+            box-shadow: 0 0 15px rgba(0,200,255,0.4);
+        }
+        .config-item-btn.off {
+            border-color: #ff3333;
+            background: rgba(255,50,50,0.15);
+            box-shadow: 0 0 15px rgba(255,50,50,0.3);
+        }
+        .config-item-btn:hover { transform: scale(1.08); }
+        .config-item-btn:active { transform: scale(0.92); }
+        @media (max-width: 600px) {
+            .config-item-btn { width: 44px; height: 44px; font-size: 16px; }
+            .item-slot { width: 60px; height: 60px; }
+            .item-slot .slot-emoji { font-size: 24px; }
+            #hit-popup { font-size: 32px; }
+            #hit-popup .sub { font-size: 18px; }
+            #status-effects { font-size: 13px; padding: 4px 10px; bottom: 140px; }
+        }
+
+        #home-screen .btn-area {
+            margin-top: 16px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+        }
+        #home-screen .btn-area .sub-hint {
+            font-size: 12px;
+            color: #666;
+            text-align: center;
+        }
+        #home-screen {
+            position: absolute; top:0; left:0; width:100%; height:100%;
+            background: rgba(0,0,20,0.92); z-index:100;
+            display:flex; flex-direction:column; align-items:center; justify-content:center;
+            color:white; font-family:sans-serif;
+            overflow-y: auto;
+            padding: 20px 10px;
+            box-sizing: border-box;
+        }
+        .mode-card {
+            background:rgba(255,255,255,0.05);
+            border:2px solid rgba(255,255,255,0.2);
+            border-radius:16px;
+            padding:20px 28px;
+            cursor:pointer;
+            text-align:center;
+            transition:0.2s;
+            width:180px;
+            user-select:none;
+            flex-shrink:0;
+        }
+        .mode-card:hover { transform:scale(1.05); border-color:#fff !important; background:rgba(255,255,255,0.15) !important; }
+        .mode-card.selected { border-color:#fff !important; background:rgba(255,255,255,0.2) !important; box-shadow:0 0 30px rgba(255,255,255,0.1); }
+        .mode-card .icon { font-size:48px; }
+        .mode-card h3 { font-size:18px; margin:6px 0; }
+        .mode-card p { font-size:12px; color:#aaa; margin:0; }
+        @media (max-width: 600px) {
+            .mode-card { width:140px !important; padding:14px 16px !important; }
+            .mode-card .icon { font-size:36px !important; }
+            .mode-card h3 { font-size:15px !important; }
+            #home-screen h1 { font-size:32px !important; }
+        }
+
+        #item-slot-1 { display: none; }
+        #item-slot-2 { display: none; }
+        #audio-hint { position: absolute; bottom: 8px; right: 12px; color: rgba(255,255,255,0.35); font-size: 11px; pointer-events: none; z-index: 10; }
+        #charge-bar {
+            position: absolute; bottom: 90px; left: 50%; transform: translateX(-50%);
+            width: 180px; height: 18px; background: rgba(0,0,0,0.7); border: 2px solid #fff;
+            border-radius: 10px; overflow: hidden; display: none; z-index: 10;
+        }
+        #charge-fill {
+            width: 0%; height: 100%; background: linear-gradient(90deg, #ff4400, #ff8800, #ffff00);
+            transition: width 0.05s;
+        }
+        .triple-indicator {
+            position: absolute; bottom: 70px; left: 50%; transform: translateX(-50%);
+            display: flex; gap: 8px; font-size: 26px; z-index: 10;
+            background: rgba(0,0,0,0.5); padding: 4px 14px; border-radius: 10px;
+        }
+        #debug-stats {
+            position: absolute; top: 15px; left: 50%; transform: translateX(-50%);
+            color: #0f0; font-size: 14px; font-weight: bold; text-shadow: 0 0 8px #000;
+            background: rgba(0,0,0,0.6); padding: 4px 16px; border-radius: 20px;
+            border: 1px solid rgba(0,255,0,0.3); z-index: 20; pointer-events: none;
+            font-family: 'Courier New', monospace;
+            text-align: center;
+        }
+        #jump-count {
+            position: absolute; bottom: 140px; left: 50%; transform: translateX(-50%);
+            color: #ff66ff; font-size: 18px; font-weight: bold;
+            text-shadow: 0 0 20px #ff66ff, 0 0 40px #ff00ff;
+            background: rgba(0,0,0,0.5); padding: 4px 16px; border-radius: 20px;
+            pointer-events: none; z-index: 10;
+            border: 2px solid #ff66ff;
+            display: none;
+        }
+        #weight-display {
+            position: absolute; top: 185px; left: 15px;
+            color: white; font-size: 14px; font-weight: bold;
+            background: rgba(0,0,0,0.6); padding: 3px 10px; border-radius: 6px;
+            pointer-events: none; z-index: 10;
+            border-left: 3px solid #ffaa00;
+        }
+        .weight-legend {
+            position: absolute; top: 218px; left: 15px;
+            color: #ddd; font-size: 11px;
+            background: rgba(0,0,0,0.7); padding: 4px 8px; border-radius: 6px;
+            pointer-events: none; z-index: 10;
+            line-height: 1.4;
+        }
+        .weight-legend span { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 5px; vertical-align: middle; }
+        .legend-blue { background: #3388ff; }
+        .legend-yellow { background: #ffcc00; }
+        .legend-red { background: #ff3333; }
+        .legend-white { background: #ffd700; }
+        #race-lock-msg {
+            position: absolute; top: 105px; left: 50%; transform: translateX(-50%);
+            color: #ff4444; font-size: 14px; font-weight: bold;
+            background: rgba(0,0,0,0.7); padding: 4px 16px; border-radius: 20px;
+            pointer-events: none; z-index: 10;
+            border: 2px solid #ff4444;
+            display: none;
+        }
+        #blue-shell-warning {
+            position: absolute; top: 25%; left: 50%; transform: translateX(-50%);
+            font-size: 32px; font-weight: bold;
+            color: #ff4488; text-shadow: 0 0 20px #ff0066, 0 0 40px #ff0044;
+            background: rgba(0,0,0,0.6); padding: 8px 24px; border-radius: 16px;
+            pointer-events: none; z-index: 20;
+            border: 2px solid #ff4488;
+            text-align: center;
+            display: none;
+            backdrop-filter: blur(2px);
+            letter-spacing: 2px;
+        }
+        #blue-shell-sub {
+            font-size: 18px;
+            color: #ffaa88;
+            margin-top: 2px;
+            text-shadow: 0 0 10px #ff4400;
+            font-weight: normal;
+        }
+        #incoming-warning {
+            position: absolute; top: 100px; right: 20px;
+            color: #ffaa00; font-size: 16px; font-weight: bold;
+            text-shadow: 0 0 20px #ff8800;
+            background: rgba(0,0,0,0.75); padding: 6px 16px; border-radius: 20px;
+            pointer-events: none; z-index: 15;
+            border: 1px solid #ff8800;
+            text-align: center;
+            min-width: 140px;
+            display: none;
+            backdrop-filter: blur(2px);
+        }
+        #incoming-sub {
+            font-size: 13px;
+            color: #ffcc66;
+            margin-top: 2px;
+        }
+        #rank-text.rank-warning {
+            color: #ff4488;
+            text-shadow: 0 0 15px #ff0066;
+        }
+        #item-config-panel-game {
+            display: none;
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+
+    <!-- ホーム画面 -->
+    <div id="home-screen">
+        <h1 style="font-size:56px; color:#ffeb3b; text-shadow:0 0 40px #ffeb3b, 0 0 80px #ff8800; margin-bottom:4px; text-align:center;">🏎️ 悪いよカート</h1>
+        <p style="font-size:16px; color:#aaa; margin-bottom:20px; text-align:center;">〜 選べ！走れ！ぶっ飛ばせ！ 〜</p>
+        <div class="mode-selector" style="display:flex; flex-wrap:wrap; gap:16px; justify-content:center; max-width:820px;">
+            <div class="mode-card" data-mode="endurance"><div class="icon">🏁</div><h3>20周耐久</h3><p>従来の20周レース</p></div>
+            <div class="mode-card" data-mode="timeattack"><div class="icon">⏱️</div><h3>タイムアタック</h3><p>3周でベストタイム</p></div>
+            <div class="mode-card" data-mode="battle"><div class="icon">🍌</div><h3>バナナバトル</h3><p>コインを30枚集めろ！</p></div>
+            <div class="mode-card" data-mode="survival"><div class="icon">💀</div><h3>サバイバル</h3><p>HP3で最後まで生き残れ</p></div>
+        </div>
+        <div class="btn-area">
+            <button id="start-game-btn" style="background:#ffeb3b; color:#000; border:none; padding:12px 40px; border-radius:30px; font-size:20px; font-weight:bold; cursor:pointer; transition:0.2s; box-shadow:0 0 30px rgba(255,235,59,0.3);">
+                🚀 スタート！
+            </button>
+
+            <!-- ★ アイテム設定パネル -->
+            <div id="item-config-panel-home">
+                <div class="config-label">⚙️ アイテム設定 (ON=出現)</div>
+                <button class="config-item-btn on" data-item="mushroom" title="キノコ">🍄</button>
+                <button class="config-item-btn on" data-item="mega" title="デカキノコ">🌟</button>
+                <button class="config-item-btn on" data-item="golden" title="金キノコ">⭐</button>
+                <button class="config-item-btn on" data-item="star" title="スター">✨</button>
+                <button class="config-item-btn on" data-item="green" title="緑甲羅">🟢</button>
+                <button class="config-item-btn on" data-item="red" title="赤甲羅">🔴</button>
+                <button class="config-item-btn on" data-item="blue" title="青甲羅">💙</button>
+                <button class="config-item-btn on" data-item="thunder" title="サンダー">⚡</button>
+                <button class="config-item-btn on" data-item="fireflower" title="ファイヤーフラワー">🔥</button>
+                <button class="config-item-btn on" data-item="bomb" title="ボム兵">💣</button>
+                <button class="config-item-btn on" data-item="triple" title="キノコ3">🍄🍄🍄</button>
+                <button class="config-item-btn on" data-item="feather" title="羽">🪶</button>
+                <button class="config-item-btn on" data-item="banana" title="バナナ">🍌</button>
+                <button class="config-item-btn on" data-item="kamek" title="カメック">🧙</button>
+                <button class="config-item-btn on" data-item="coinbox" title="コインボックス">📦</button>
+            </div>
+
+            <div class="sub-hint">WASD / 矢印キー 移動 | Shift/J/クリック アイテム使用 | Z 背面投げ | X 後ろ向き | Q 重さ変更 | P デバッグ表示</div>
+        </div>
+    </div>
+
+    <!-- ゲームUI -->
+    <div id="ui-container">
+        <div id="rank-text">順位: --</div>
+        <div id="lap-text">Lap: --</div>
+        <div id="coin-text">🪙 コイン: 0/10</div>
+        <div id="hp-text">❤️ HP: 3/3</div>
+        <div id="time-display">⏱️ 00:00.000</div>
+        <div id="best-time-display">🏆 ベスト: --</div>
+        <div id="status-text">黄色のエリアへ向かおう！</div>
+        <div id="warning-text"></div>
+    </div>
+
+    <!-- ★ ステータス表示 (右下) -->
+    <div id="status-effects">
+        <div class="effect-item" id="effect-star" style="display:none;">⭐ スター: <span id="star-time">0</span>秒</div>
+        <div class="effect-item" id="effect-golden" style="display:none;">🌟 金キノコ: <span id="golden-time">0</span>秒</div>
+        <div class="effect-item" id="effect-mega" style="display:none;">🍄 デカキノコ: <span id="mega-time">0</span>秒</div>
+        <div class="effect-item" id="effect-bullet" style="display:none;">🚀 キラー: <span id="bullet-time">0</span>秒</div>
+        <div class="effect-item" id="effect-mushroom" style="display:none;">🍄 キノコ: <span id="mushroom-time">0</span>秒</div>
+    </div>
+
+    <!-- ★ ヒットポップアップ -->
+    <div id="hit-popup">
+        <div id="hit-popup-main"></div>
+        <div class="sub" id="hit-popup-sub"></div>
+    </div>
+
+    <!-- ★ アイテムスロット -->
+    <div id="item-slots">
+        <div class="item-slot" id="slot-1">
+            <span class="slot-emoji">⬜</span>
+            <span class="slot-label">スロット1</span>
+            <span class="slot-sub">Shift/クリック</span>
+        </div>
+        <div class="item-slot" id="slot-2">
+            <span class="slot-emoji">⬜</span>
+            <span class="slot-label">スロット2</span>
+            <span class="slot-sub">控え</span>
+        </div>
+    </div>
+
+    <div id="item-config-panel-game" style="display:none;"></div>
+    <div id="countdown"></div>
+    <div id="turbo-ui"></div>
+    <div id="charge-bar"><div id="charge-fill"></div></div>
+    <div id="audio-hint">※クリックホールドでボムチャージ / Xキーで後ろ向き / Pでデバッグ</div>
+    <div class="triple-indicator" id="triple-indicator" style="display:none;"></div>
+    <div id="debug-stats">FPS: -- | 最寄NPC: --</div>
+    <div id="jump-count">✨ ジャンプアクション: 0回 ✨</div>
+    <div id="weight-display">⚖️ あなた: 普通</div>
+    <div id="race-lock-msg">🔒 レース中は変更できません</div>
+    <div id="blue-shell-warning"><div>💙 青甲羅が迫る！</div><div id="blue-shell-sub">⚠️ 回避！ ⚠️</div></div>
+    <div id="incoming-warning"><div id="incoming-main">⚠️ 飛来物</div><div id="incoming-sub">🟢 緑甲羅 まで 23m</div></div>
+    <div class="weight-legend">
+        <div><span class="legend-blue"></span>軽い (加速◎ 最高速△)</div>
+        <div><span class="legend-yellow"></span>普通 (バランス)</div>
+        <div><span class="legend-red"></span>重い (加速△ 最高速◎)</div>
+        <div><span class="legend-white"></span>あなた (Qで変更)</div>
+    </div>
+
+<script>
+// --- グローバル変数 ---
+let audioCtx = null, bgmInterval = null;
+let gameMode = 'endurance', gameTargetLaps = 20, gameNpcCount = 11, gameCoinTarget = 10;
+let gameStarted = false, raceStartTime = 0;
+let playerHP = 3, maxHP = 3;
+let timeAttackBestTime = localStorage.getItem('timeAttackBestTime') || null;
+let timeAttackCurrentTime = 0, timeAttackRunning = false;
+let raceEndTimer = 0;
+let isReturningToHome = false;
+let LEFT_WALL_X = -25;
+let RIGHT_WALL_X = 25;
+
+// --- アイテムスイッチ関連 ---
+let currentItemSwitchMode = 'NORMAL';
+
+// ★ アイテムトグル状態
+let itemToggleState = {
+    mushroom: true,
+    mega: true,
+    golden: true,
+    star: true,
+    green: true,
+    red: true,
+    blue: true,
+    thunder: true,
+    fireflower: true,
+    bomb: true,
+    triple: true,
+    feather: true,
+    banana: true,
+    kamek: true,
+    coinbox: true
+};
+
+const ITEM_KEY_MAP = {
+    "キノコ": "mushroom",
+    "デカキノコ": "mega",
+    "金キノコ": "golden",
+    "スター": "star",
+    "緑甲羅": "green",
+    "赤甲羅": "red",
+    "青甲羅": "blue",
+    "サンダー": "thunder",
+    "ファイヤーフラワー": "fireflower",
+    "ボム兵": "bomb",
+    "キノコ3": "triple",
+    "羽": "feather",
+    "バナナ": "banana",
+    "カメック": "kamek",
+    "コインボックス": "coinbox"
+};
+
+function isItemEnabled(itemName) {
+    const key = ITEM_KEY_MAP[itemName];
+    if (!key) return true;
+    return itemToggleState[key] !== false;
+}
+
+function getItemPoolForMode(mode, rank) {
+    if (mode === 'SURVIVAL') {
+        const base = ["キノコ", "緑甲羅", "ボム兵", "コイン", "コインボックス", "カメック"];
+        return base.filter(isItemEnabled);
+    }
+    let pool;
+    if (rank <= 3) {
+        pool = ["キノコ","キノコ","コイン","コイン","コイン","ボム兵","ボム兵","緑甲羅","羽","バナナ","バナナ","コインボックス"];
+    } else if (rank <= 7) {
+        pool = ["キノコ","赤甲羅","赤甲羅","金キノコ","スター","ファイヤーフラワー","ボム兵","キノコ3","バナナ","カメック","コインボックス"];
+    } else {
+        pool = ["金キノコ","スター","サンダー","青甲羅","ボム兵","キノコ3","キノコ3","バナナ","バナナ","カメック","カメック","コインボックス","コインボックス"];
+    }
+    return pool.filter(isItemEnabled);
+}
+
+// --- NPCのアイテム取得時もフィルタ ---
+function getRandomNpcItem() {
+    const allItems = ["キノコ", "緑甲羅", "赤甲羅", "サンダー", "デカキノコ", "金キノコ", "スター", "青甲羅", "ファイヤーフラワー", "ボム兵", "キノコ3", "羽", "バナナ", "カメック", "コインボックス"];
+    const filtered = allItems.filter(isItemEnabled);
+    if (filtered.length === 0) return "キノコ";
+    return filtered[Math.floor(Math.random() * filtered.length)];
+}
+
+// --- アイテム設定パネルUI ---
+function updateConfigPanelUI() {
+    const btns = document.querySelectorAll('#item-config-panel-home .config-item-btn');
+    btns.forEach(btn => {
+        const key = btn.dataset.item;
+        if (key && itemToggleState.hasOwnProperty(key)) {
+            if (itemToggleState[key]) {
+                btn.classList.remove('off');
+                btn.classList.add('on');
+            } else {
+                btn.classList.remove('on');
+                btn.classList.add('off');
+            }
+        }
+    });
+}
+
+function setupConfigPanel() {
+    const btns = document.querySelectorAll('#item-config-panel-home .config-item-btn');
+    btns.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const key = btn.dataset.item;
+            if (!key || !itemToggleState.hasOwnProperty(key)) return;
+
+            if (raceState === 2) {
+                document.getElementById("turbo-ui").innerText = "🔒 レース中はアイテム設定を変更できません！";
+                document.getElementById("turbo-ui").style.color = "#ff4444";
+                setTimeout(() => {
+                    if (document.getElementById("turbo-ui").innerText.includes("変更できません")) {
+                        document.getElementById("turbo-ui").innerText = "";
+                    }
+                }, 1500);
+                return;
+            }
+
+            itemToggleState[key] = !itemToggleState[key];
+            updateConfigPanelUI();
+
+            const status = itemToggleState[key] ? 'ON' : 'OFF';
+            const emoji = btn.textContent.trim();
+            document.getElementById("turbo-ui").innerText = `${emoji} ${status}`;
+            document.getElementById("turbo-ui").style.color = itemToggleState[key] ? '#00ccff' : '#ff3333';
+            setTimeout(() => {
+                if (document.getElementById("turbo-ui").innerText.includes('ON') ||
+                    document.getElementById("turbo-ui").innerText.includes('OFF')) {
+                    document.getElementById("turbo-ui").innerText = "";
+                }
+            }, 800);
+        });
+    });
+}
+
+// --- アイテムスロット更新 ---
+function updateItemSlots() {
+    const slot1 = document.getElementById('slot-1');
+    const slot2 = document.getElementById('slot-2');
+    const emoji1 = slot1.querySelector('.slot-emoji');
+    const emoji2 = slot2.querySelector('.slot-emoji');
+    const label1 = slot1.querySelector('.slot-label');
+    const label2 = slot2.querySelector('.slot-label');
+    const sub1 = slot1.querySelector('.slot-sub');
+    const sub2 = slot2.querySelector('.slot-sub');
+
+    if (heldItems[0]) {
+        slot1.classList.add('has-item');
+        const item = heldItems[0];
+        if (item === "キノコ3" && tripleMushroomCount > 0) {
+            emoji1.textContent = '🍄🍄🍄';
+            label1.textContent = `キノコ3 (残${tripleMushroomCount})`;
+            sub1.textContent = 'Shift/クリック';
+        } else if (item === "ファイヤーフラワー" && fireFlowerAmmo > 0) {
+            emoji1.textContent = '🔥';
+            label1.textContent = `ファイヤーフラワー (残${fireFlowerAmmo})`;
+            sub1.textContent = 'Shift/クリック';
+        } else if (item === "羽") {
+            emoji1.textContent = '🪶';
+            label1.textContent = '羽';
+            sub1.textContent = 'Shift/クリック';
+        } else if (item === "バナナ") {
+            emoji1.textContent = '🍌';
+            label1.textContent = 'バナナ';
+            sub1.textContent = 'Shift/クリック';
+        } else if (item === "カメック") {
+            emoji1.textContent = '🧙';
+            label1.textContent = 'カメック';
+            sub1.textContent = 'Shift/クリック';
+        } else if (item === "コインボックス") {
+            emoji1.textContent = '📦';
+            label1.textContent = 'コインボックス';
+            sub1.textContent = 'Shift/クリック';
+        } else if (item === "コイン") {
+            emoji1.textContent = '🪙';
+            label1.textContent = 'コイン';
+            sub1.textContent = 'Shift/クリック';
+        } else if (isItemShielding && (item === "緑甲羅" || item === "赤甲羅")) {
+            emoji1.textContent = getEmojiForItem(item);
+            label1.textContent = `${item} (ガード中)`;
+            sub1.textContent = '再入力で発射';
+        } else {
+            emoji1.textContent = getEmojiForItem(item);
+            label1.textContent = item;
+            sub1.textContent = 'Shift/クリック';
+        }
+    } else {
+        slot1.classList.remove('has-item');
+        if (itemBulletTimer > 0) {
+            emoji1.textContent = '🚀';
+            label1.textContent = `キラー (${Math.ceil(itemBulletTimer/60)}秒)`;
+            sub1.textContent = '突進中';
+        } else if (itemStarTimer > 0) {
+            emoji1.textContent = '⭐';
+            label1.textContent = `スター (${Math.ceil(itemStarTimer/60)}秒)`;
+            sub1.textContent = '無敵';
+        } else if (itemGoldenTimer > 0) {
+            emoji1.textContent = '🌟';
+            label1.textContent = `金キノコ (${Math.ceil(itemGoldenTimer/60)}秒)`;
+            sub1.textContent = '高速';
+        } else {
+            emoji1.textContent = '⬜';
+            label1.textContent = 'スロット1';
+            sub1.textContent = '空き';
+        }
+    }
+
+    if (heldItems[1]) {
+        slot2.classList.add('has-item');
+        const item = heldItems[1];
+        emoji2.textContent = getEmojiForItem(item);
+        label2.textContent = item;
+        sub2.textContent = '控え';
+    } else {
+        slot2.classList.remove('has-item');
+        emoji2.textContent = '⬜';
+        label2.textContent = 'スロット2';
+        sub2.textContent = '空き';
+    }
+}
+
+// --- ステータス表示更新 ---
+function updateStatusEffects() {
+    const effects = document.getElementById('status-effects');
+    let hasEffect = false;
+
+    const starEl = document.getElementById('effect-star');
+    const goldenEl = document.getElementById('effect-golden');
+    const megaEl = document.getElementById('effect-mega');
+    const bulletEl = document.getElementById('effect-bullet');
+    const mushroomEl = document.getElementById('effect-mushroom');
+
+    if (itemStarTimer > 0) {
+        starEl.style.display = 'block';
+        document.getElementById('star-time').textContent = Math.ceil(itemStarTimer / 60);
+        hasEffect = true;
+    } else { starEl.style.display = 'none'; }
+
+    if (itemGoldenTimer > 0) {
+        goldenEl.style.display = 'block';
+        document.getElementById('golden-time').textContent = Math.ceil(itemGoldenTimer / 60);
+        hasEffect = true;
+    } else { goldenEl.style.display = 'none'; }
+
+    if (itemMegaTimer > 0) {
+        megaEl.style.display = 'block';
+        document.getElementById('mega-time').textContent = Math.ceil(itemMegaTimer / 60);
+        hasEffect = true;
+    } else { megaEl.style.display = 'none'; }
+
+    if (itemBulletTimer > 0) {
+        bulletEl.style.display = 'block';
+        document.getElementById('bullet-time').textContent = Math.ceil(itemBulletTimer / 60);
+        hasEffect = true;
+    } else { bulletEl.style.display = 'none'; }
+
+    if (itemMushroomTimer > 0) {
+        mushroomEl.style.display = 'block';
+        document.getElementById('mushroom-time').textContent = Math.ceil(itemMushroomTimer / 60);
+        hasEffect = true;
+    } else { mushroomEl.style.display = 'none'; }
+
+    effects.style.display = hasEffect ? 'block' : 'none';
+}
+
+// --- ヒットポップアップ表示 ---
+let hitPopupTimer = null;
+
+function showHitPopup(mainText, subText, color = '#ffd700') {
+    const popup = document.getElementById('hit-popup');
+    const main = document.getElementById('hit-popup-main');
+    const sub = document.getElementById('hit-popup-sub');
+
+    main.textContent = mainText;
+    sub.textContent = subText || '';
+    popup.style.color = color;
+    popup.style.opacity = '1';
+    popup.style.transform = 'translate(-50%, -50%) scale(1)';
+
+    // アニメーション用
+    popup.style.transition = 'none';
+    popup.style.transform = 'translate(-50%, -50%) scale(1.5)';
+    popup.style.opacity = '0';
+    requestAnimationFrame(() => {
+        popup.style.transition = 'transform 0.15s ease-out, opacity 0.15s ease-out';
+        popup.style.transform = 'translate(-50%, -50%) scale(1)';
+        popup.style.opacity = '1';
+    });
+
+    if (hitPopupTimer) {
+        clearTimeout(hitPopupTimer);
+    }
+
+    hitPopupTimer = setTimeout(() => {
+        popup.style.transition = 'transform 0.3s ease-in, opacity 0.3s ease-in';
+        popup.style.transform = 'translate(-50%, -50%) scale(0.8)';
+        popup.style.opacity = '0';
+        hitPopupTimer = null;
+    }, 1500);
+}
+
+// --- タイムフォーマット ---
+function formatTime(time) {
+    let m = Math.floor(time / 60), s = Math.floor(time % 60), ms = Math.floor((time % 1) * 1000);
+    return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}.${String(ms).padStart(3,'0')}`;
+}
+
+// --- 音声 ---
+function initAudio() { if (audioCtx) return; audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+window.addEventListener('keydown', () => { initAudio(); });
+
+function playTone(f, d, t='sine', v=0.1) {
+    if (!audioCtx) return;
+    try {
+        let osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+        osc.type = t; osc.frequency.setValueAtTime(f, audioCtx.currentTime);
+        gain.gain.setValueAtTime(v, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.00001, audioCtx.currentTime + d);
+        osc.connect(gain); gain.connect(audioCtx.destination);
+        osc.start(); osc.stop(audioCtx.currentTime + d);
+    } catch(e) {}
+}
+function soundCount() { playTone(440, 0.1, 'sine', 0.15); }
+function soundGo() { playTone(880, 0.4, 'sine', 0.2); startBGM(); }
+function soundItem() { playTone(523, 0.05); setTimeout(()=>playTone(659, 0.05), 50); setTimeout(()=>playTone(784, 0.15), 100); }
+function soundBoost() {
+    playTone(330, 0.04, 'sawtooth', 0.08);
+    setTimeout(()=>playTone(440, 0.04, 'sawtooth', 0.08), 40);
+    setTimeout(()=>playTone(554, 0.04, 'sawtooth', 0.08), 80);
+    setTimeout(()=>playTone(659, 0.12, 'sawtooth', 0.08), 120);
+}
+function soundHit() { playTone(120, 0.25, 'sawtooth', 0.25); playTone(90, 0.3, 'triangle', 0.3); }
+function soundBlueShell() { playTone(200, 0.3, 'sawtooth', 0.2); setTimeout(()=>playTone(150, 0.4, 'sawtooth', 0.3), 100); }
+function soundFireball() { playTone(800, 0.05, 'sawtooth', 0.08); setTimeout(()=>playTone(600, 0.04, 'sawtooth', 0.06), 20); }
+function soundBomb() { playTone(300, 0.15, 'sawtooth', 0.15); setTimeout(()=>playTone(200, 0.2, 'sawtooth', 0.2), 80); }
+function soundCrash() { playTone(180, 0.15, 'sawtooth', 0.2); setTimeout(()=>playTone(120, 0.2, 'sawtooth', 0.25), 80); }
+function soundCoin() { playTone(880, 0.06, 'sine', 0.1); setTimeout(()=>playTone(1100, 0.06, 'sine', 0.08), 40); }
+function soundRocket() { playTone(660, 0.3, 'sawtooth', 0.15); }
+
+function startBGM() {
+    if (bgmInterval) clearInterval(bgmInterval);
+    let step = 0, bass = [110,110,130,110,146,146,165,130];
+    bgmInterval = setInterval(() => {
+        if (raceState !== 2) { if(raceState === 3) clearInterval(bgmInterval); return; }
+        playTone(bass[step % bass.length], 0.13, 'triangle', 0.18);
+        if (step % 2 === 0) {
+            let mel = [440,493,523,587,659,587,523,493];
+            playTone(mel[(step/2) % mel.length], 0.07, 'square', 0.02);
+        }
+        step++;
+    }, 160);
+}
+
+// --- Three.js ---
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x557799);
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1500);
+const renderer = new THREE.WebGLRenderer({ antialias: false });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(1);
+document.body.appendChild(renderer.domElement);
+
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.6); scene.add(ambientLight);
+const dirLight = new THREE.DirectionalLight(0xfffcaa, 0.8); dirLight.position.set(100, 400, 100); scene.add(dirLight);
+
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(8000, 8000), new THREE.MeshStandardMaterial({ color: 0x2d2822 }));
+floor.rotation.x = -Math.PI/2; scene.add(floor);
+
+// --- コース ---
+const TRACK_WIDTH = 80;
+const trackPieces = new THREE.Group();
+const roadMat = new THREE.MeshStandardMaterial({ color: 0x383840, roughness: 0.7 });
+const rs = new THREE.Mesh(new THREE.PlaneGeometry(TRACK_WIDTH, 400), roadMat); rs.rotation.x = -Math.PI/2; rs.position.set(0,0.02,100); trackPieces.add(rs);
+const rl1 = new THREE.Mesh(new THREE.PlaneGeometry(300, TRACK_WIDTH), roadMat); rl1.rotation.x = -Math.PI/2; rl1.position.set(-150,0.02,-200); trackPieces.add(rl1);
+const rc1 = new THREE.Mesh(new THREE.PlaneGeometry(TRACK_WIDTH, 200), roadMat); rc1.rotation.x = -Math.PI/2; rc1.position.set(-300,0.02,-300); trackPieces.add(rc1);
+const rc2 = new THREE.Mesh(new THREE.PlaneGeometry(200, TRACK_WIDTH), roadMat); rc2.rotation.x = -Math.PI/2; rc2.position.set(-200,0.02,-400); trackPieces.add(rc2);
+const rr1 = new THREE.Mesh(new THREE.PlaneGeometry(TRACK_WIDTH, 300), roadMat); rr1.rotation.x = -Math.PI/2; rr1.position.set(350,0.02,-250); trackPieces.add(rr1);
+const rr2 = new THREE.Mesh(new THREE.PlaneGeometry(150, TRACK_WIDTH), roadMat); rr2.rotation.x = -Math.PI/2; rr2.position.set(275,0.02,-100); trackPieces.add(rr2);
+const rr3 = new THREE.Mesh(new THREE.PlaneGeometry(TRACK_WIDTH, 350), roadMat); rr3.rotation.x = -Math.PI/2; rr3.position.set(200,0.02,75); trackPieces.add(rr3);
+const rb = new THREE.Mesh(new THREE.PlaneGeometry(200, TRACK_WIDTH), roadMat); rb.rotation.x = -Math.PI/2; rb.position.set(100,0.02,250); trackPieces.add(rb);
+scene.add(trackPieces);
+
+// ゴールライン
+const finishGeo = new THREE.PlaneGeometry(TRACK_WIDTH, 10);
+const cvs = document.createElement('canvas'); cvs.width=256; cvs.height=32;
+const cx = cvs.getContext('2d');
+cx.fillStyle='#fff'; cx.fillRect(0,0,256,32); cx.fillStyle='#000';
+for(let i=0;i<16;i++) for(let j=0;j<2;j++) if((i+j)%2===0) cx.fillRect(i*16,j*16,16,16);
+const finishText = new THREE.CanvasTexture(cvs);
+const finishLine = new THREE.Mesh(finishGeo, new THREE.MeshBasicMaterial({ map: finishText, side: THREE.DoubleSide }));
+finishLine.rotation.x = -Math.PI/2; finishLine.position.set(0,0.06,50); scene.add(finishLine);
+
+// エントリーゾーン
+const entryGeo = new THREE.PlaneGeometry(TRACK_WIDTH, 40);
+const entryMat = new THREE.MeshBasicMaterial({ color: 0xffff00, transparent: true, opacity: 0.3, side: THREE.DoubleSide });
+const entryZone = new THREE.Mesh(entryGeo, entryMat);
+entryZone.rotation.x = -Math.PI/2;
+entryZone.position.set(0,0.05,110);
+scene.add(entryZone);
+
+// 工場
+const factoryGroup = new THREE.Group();
+const FACTORY_WIDTH = 50;
+LEFT_WALL_X = -FACTORY_WIDTH / 2;
+RIGHT_WALL_X = FACTORY_WIDTH / 2;
+const ifloor = new THREE.Mesh(new THREE.PlaneGeometry(FACTORY_WIDTH, 200), new THREE.MeshStandardMaterial({ color: 0x1c1c22 }));
+ifloor.rotation.x = -Math.PI/2; ifloor.position.set(0,0.04,-50); factoryGroup.add(ifloor);
+const roof = new THREE.Mesh(new THREE.BoxGeometry(FACTORY_WIDTH, 3, 200), new THREE.MeshStandardMaterial({ color: 0x15151a }));
+roof.position.set(0,50,-50); factoryGroup.add(roof);
+const wallMat = new THREE.MeshStandardMaterial({ color: 0x4f4f5d });
+const rw = new THREE.Mesh(new THREE.BoxGeometry(4,50,200), wallMat); rw.position.set(RIGHT_WALL_X,25,-50); factoryGroup.add(rw);
+const lw = new THREE.Mesh(new THREE.BoxGeometry(4,50,200), wallMat); lw.position.set(LEFT_WALL_X,25,-50); factoryGroup.add(lw);
+const alertLight = new THREE.PointLight(0xff0000, 1.5, 150); alertLight.position.set(0,45,-50); factoryGroup.add(alertLight);
+scene.add(factoryGroup);
+
+// ポール
+const poleGeo = new THREE.CylinderGeometry(3.5,3.5,70,16);
+const poleMat = new THREE.MeshStandardMaterial({ color: 0xeeeeee, roughness: 0.4 });
+const p1g = new THREE.Group(); p1g.position.set(12,0,-250);
+const p1m = new THREE.Mesh(poleGeo, poleMat); p1m.position.y=35; p1g.add(p1m);
+for(let h=5; h<=65; h+=10){ const ring = new THREE.Mesh(new THREE.CylinderGeometry(3.7,3.7,5,16), new THREE.MeshStandardMaterial({color:0x0055ff})); ring.position.y=h-35; p1m.add(ring); }
+scene.add(p1g);
+const p2g = new THREE.Group(); p2g.position.set(-12,0,-250);
+const p2m = new THREE.Mesh(poleGeo, poleMat); p2m.position.y=35; p2g.add(p2m);
+for(let h=5; h<=65; h+=10){ const ring = new THREE.Mesh(new THREE.CylinderGeometry(3.7,3.7,5,16), new THREE.MeshStandardMaterial({color:0x0055ff})); ring.position.y=h-35; p2m.add(ring); }
+scene.add(p2g);
+
+// ギミック
+const gearGroup = new THREE.Group(); gearGroup.position.set(-140,55,-80);
+const gearCenter = new THREE.Mesh(new THREE.CylinderGeometry(25,25,10,16), new THREE.MeshStandardMaterial({color:0x555561}));
+gearCenter.rotation.x = Math.PI/2; gearGroup.add(gearCenter);
+for(let i=0;i<12;i++){ const tooth = new THREE.Mesh(new THREE.BoxGeometry(8,8,14), new THREE.MeshStandardMaterial({color:0x3d3d47})); tooth.position.set(Math.cos(i*Math.PI/6)*28, Math.sin(i*Math.PI/6)*28, 0); tooth.rotation.z = i*Math.PI/6; gearGroup.add(tooth); }
+scene.add(gearGroup);
+
+// 縁石・水・ジャンプ台
+const curbW = new THREE.MeshStandardMaterial({color:0xeeeeee}), curbR = new THREE.MeshStandardMaterial({color:0xff2222});
+for(let i=0;i<14;i++){ const curb = new THREE.Mesh(new THREE.BoxGeometry(16,2,6), i%2===0?curbW:curbR); curb.position.set(-350,0.6,-360+i*16); scene.add(curb); }
+const water = new THREE.Mesh(new THREE.PlaneGeometry(450,150), new THREE.MeshStandardMaterial({color:0x0044cc, roughness:0.1}));
+water.rotation.x = -Math.PI/2; water.position.set(150,-1,-400); scene.add(water);
+const ramp = new THREE.Mesh(new THREE.BoxGeometry(60,5,45), new THREE.MeshStandardMaterial({color:0xff1111}));
+ramp.position.set(-90,1,-400); ramp.rotation.z=0.15; scene.add(ramp);
+const bridgeMat = new THREE.MeshStandardMaterial({color:0x7c4c24});
+const b1 = new THREE.Mesh(new THREE.BoxGeometry(50,2,50), bridgeMat); b1.position.set(0,-1,-400); scene.add(b1);
+const b2 = new THREE.Mesh(new THREE.BoxGeometry(50,2,50), bridgeMat); b2.position.set(125,-1,-400); scene.add(b2);
+const b3 = new THREE.Mesh(new THREE.BoxGeometry(50,2,50), bridgeMat); b3.position.set(250,-1,-400); scene.add(b3);
+const srMat = new THREE.MeshStandardMaterial({color:0xff8800});
+const sr1 = new THREE.Mesh(new THREE.BoxGeometry(20,2.5,30), srMat); sr1.position.set(20,-0.2,-400); sr1.rotation.z=0.2; scene.add(sr1);
+const sr2 = new THREE.Mesh(new THREE.BoxGeometry(20,2.5,30), srMat); sr2.position.set(145,-0.2,-400); sr2.rotation.z=0.2; scene.add(sr2);
+
+// プレイヤーカート
+const carGroup = new THREE.Group();
+const carModel = new THREE.Mesh(new THREE.BoxGeometry(2.4,1,3.4), new THREE.MeshStandardMaterial({ color: 0xffd700 }));
+carModel.position.y=0.5; carGroup.add(carModel); scene.add(carGroup);
+
+// 重さ
+let playerWeight = "普通";
+const weightStats = {
+    "軽い": { maxSpeedMul: 0.85, accelMul: 1.3, mass: 0.6, color: 0x3388ff },
+    "普通": { maxSpeedMul: 1.0, accelMul: 1.0, mass: 1.0, color: 0xffcc00 },
+    "重い": { maxSpeedMul: 1.25, accelMul: 0.7, mass: 1.6, color: 0xff3333 }
+};
+let weightIndex = 1;
+const weightKeys = ["軽い", "普通", "重い"];
+
+function updatePlayerColor() {
+    carModel.material.color.setHex(weightStats[playerWeight].color);
+    document.getElementById("weight-display").textContent = `⚖️ あなた: ${playerWeight}`;
+}
+
+const sparkL = new THREE.Mesh(new THREE.SphereGeometry(0.45,8,8), new THREE.MeshBasicMaterial({color:0xff4500, visible:false}));
+sparkL.position.set(-1.3,0.2,1.5); carGroup.add(sparkL);
+const sparkR = new THREE.Mesh(new THREE.SphereGeometry(0.45,8,8), new THREE.MeshBasicMaterial({color:0xff4500, visible:false}));
+sparkR.position.set(1.3,0.2,1.5); carGroup.add(sparkR);
+
+// --- NPC ---
+const npcs = [];
+for (let i = 0; i < 11; i++) {
+    const w = ["軽い","普通","重い"][Math.floor(Math.random()*3)];
+    const st = weightStats[w];
+    const col = { "軽い":0x3388ff, "普通":0xffcc00, "重い":0xff3333 }[w];
+    npcs.push({
+        color: col, weight: w, mesh: new THREE.Group(), progress: 0, lap: 1,
+        isSquished: 0, isMega: 0, isStar: 0, heldItem: null, itemUseTimer: 0, boostTimer: 0,
+        mass: st.mass, topSpeedMul: (0.7+Math.random()*0.5)*st.maxSpeedMul,
+        accelMul: (0.7+Math.random()*0.5)*st.accelMul,
+        velocityX: 0, velocityZ: 0, isCrashing: false, crashTimer: 0,
+        pickupCooldown: 0,
+        lastUsedItem: null
+    });
+    const ch = new THREE.Mesh(new THREE.BoxGeometry(2.4,1,3.4), new THREE.MeshStandardMaterial({ color: col }));
+    ch.position.y=0.5; npcs[i].mesh.add(ch); scene.add(npcs[i].mesh); npcs[i].chassis = ch;
+    const nsl = new THREE.Mesh(new THREE.SphereGeometry(0.35,8,8), new THREE.MeshBasicMaterial({color:0xff3333, visible:false}));
+    nsl.position.set(-1.3,0.2,1.5); npcs[i].mesh.add(nsl);
+    const nsr = new THREE.Mesh(new THREE.SphereGeometry(0.35,8,8), new THREE.MeshBasicMaterial({color:0xff3333, visible:false}));
+    nsr.position.set(1.3,0.2,1.5); npcs[i].mesh.add(nsr);
+    npcs[i].sparkLeft = nsl; npcs[i].sparkRight = nsr;
+}
+
+// --- アイテムボックス ---
+const itemBoxes = [];
+const boxGeo = new THREE.BoxGeometry(4,4,4);
+const boxMat = new THREE.MeshBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 0.6 });
+const itemBoxPositions = [];
+function addRow(xs,zs,xe,ze,c){ for(let i=0;i<c;i++){ let t=c>1?i/(c-1):0.5; itemBoxPositions.push({x:xs+(xe-xs)*t, z:zs+(ze-zs)*t}); } }
+addRow(-32,150,32,150,5); addRow(-150,-225,-150,-175,5); addRow(-332,-300,-268,-300,5);
+addRow(318,-250,382,-250,5); addRow(100,218,100,282,5);
+
+// --- アイテム定義 ---
+let itemTypes = ["キノコ", "緑甲羅", "赤甲羅", "サンダー", "デカキノコ", "金キノコ", "スター", "青甲羅", "ファイヤーフラワー", "ボム兵", "キノコ3", "羽", "バナナ", "カメック", "コイン", "コインボックス"];
+
+let heldItems = [null, null];
+let isItemRoulette = false, rouletteSlot = -1, rouletteTimer = 0;
+let itemMushroomTimer = 0, itemMegaTimer = 0, itemGoldenTimer = 0, itemStarTimer = 0;
+let itemBulletTimer = 0, bulletProgress = 0;
+let isItemShielding = false, shieldShellMesh = null;
+let warningTimer = 0, warningMessage = "", warningColor = "#ff3333";
+let tripleMushroomCount = 0;
+let itemFeatherTimer = 0, featherJumpCount = 0;
+let isMouseDown = false;
+
+// --- 散らばったコイン ---
+const scatteredCoins = [];
+
+// --- その他変数 ---
+const shells = [], droppedItems = [], explosions = [];
+let fireFlowerAmmo = 0, fireballCooldown = 0;
+const fireballs = [], bombs = [];
+let bombChargeTime = 0, isChargingBomb = false, bombChargeMax = 90;
+
+const incomingEl = document.getElementById('incoming-warning');
+const incomingMain = document.getElementById('incoming-main');
+const incomingSub = document.getElementById('incoming-sub');
+const blueShellEl = document.getElementById('blue-shell-warning');
+const blueShellSub = document.getElementById('blue-shell-sub');
+
+// ジャンプ
+let jumpActionCount = 0, jumpActionCountThisJump = 0;
+let isJumping = false, canChargeJump = true, lastJumpActionBoost = 0;
+let speed = 0, baseMaxSpeed = 2.1;
+let playerLap = 1, midCheckpointPassed = false, isFinished = false;
+let isDrifting = false, driftDir = 0, driftCharge = 0, turboState = 0, turboTimer = 0, isSquishedTimer = 0;
+let carY = 0, jumpVelocity = 0, hasJumpActioned = false, jumpActionTimer = 0;
+let pendingChargeTurbo = 0, pendingChargeSpeed = 0, pendingChargeMsg = "", pendingChargeColor = "#00ff00";
+let raceState = 0, countdownTime = 0, rocketTimer = 0, rocketFailed = false;
+let currentCameraPos = new THREE.Vector3(0,7,180), jumpChargeTime = 0;
+let isWallRiding = false, wallRideSide = 0, wallKickVelocityX = 0, wallKickIgnoreTimer = 0;
+let centerUiTimer = 0, lastCenterText = "", lastSecondsInt = -1;
+let wallKickCount = 0, poleSpinTimer = 0;
+let jumpRotX = 0, jumpRotZ = 0;
+let playerHitInvincibleTimer = 0;
+let coins = 0, playerProgress = 0;
+let lookBack = false;
+
+let frameCount = 0, lastFpsUpdate = performance.now(), currentFps = 0, showDebugStats = true;
+
+const keys = { w:false, a:false, s:false, d:false, v:false, e:false, " ":false, shift:false, j:false, z:false, p:false, q:false, x:false, c:false };
+carGroup.position.set(0,0,130);
+
+// --- ★ カメックシステム ---
+const kameks = [];
+const kamekTraps = [];
+
+// --- ★ プレイヤーが使用するカメック (複数管理) ---
+let playerKameks = [];
+
+function getEmojiForItem(type) {
+    switch(type) {
+        case "キノコ": return "🍄";
+        case "キノコ3": return "🍄🍄🍄";
+        case "金キノコ": return "🌟";
+        case "緑甲羅": return "🟢";
+        case "赤甲羅": return "🔴";
+        case "青甲羅": return "💙";
+        case "サンダー": return "⚡";
+        case "デカキノコ": return "🍄";
+        case "スター": return "⭐";
+        case "コイン": return "🪙";
+        case "コインボックス": return "📦🪙";
+        case "キラー": return "🚀";
+        case "ファイヤーフラワー": return "🔥";
+        case "ボム兵": return "💣";
+        case "羽": return "🪶";
+        case "バナナ": return "🍌";
+        case "カメック": return "🧙";
+        default: return "❓";
+    }
+}
+
+// --- ★ バナナのメッシュ ---
+function createBananaMesh() {
+    const group = new THREE.Group();
+    const geo = new THREE.CylinderGeometry(1.0, 1.0, 0.25, 12);
+    const mat = new THREE.MeshStandardMaterial({ color: 0xffcc00, roughness: 0.8 });
+    const disc = new THREE.Mesh(geo, mat);
+    disc.rotation.x = Math.PI / 2;
+    disc.scale.set(1.4, 1, 0.8);
+    group.add(disc);
+    const edgeMat = new THREE.MeshStandardMaterial({ color: 0xcc9900 });
+    const edge = new THREE.Mesh(new THREE.RingGeometry(0.7, 1.0, 12), edgeMat);
+    edge.rotation.x = -Math.PI / 2;
+    edge.position.y = 0.01;
+    edge.scale.set(1.4, 1, 0.8);
+    group.add(edge);
+    return group;
+}
+
+// コース進捗
+const npcPathNodes = [
+    {x:0,z:300}, {x:0,z:0}, {x:0,z:-200}, {x:-300,z:-200}, {x:-300,z:-400},
+    {x:-100,z:-400}, {x:-90,z:-400}, {x:0,z:-400}, {x:125,z:-400}, {x:250,z:-400},
+    {x:350,z:-400}, {x:350,z:-100}, {x:200,z:-100}, {x:200,z:250}, {x:0,z:250}
+];
+const NODE_COUNT = npcPathNodes.length;
+let totalTrackLength = 0, segmentLengths = [];
+
+function initTrackLengths() {
+    totalTrackLength = 0; segmentLengths = [];
+    for(let i=0;i<NODE_COUNT;i++){
+        let p1 = npcPathNodes[i], p2 = npcPathNodes[(i+1)%NODE_COUNT];
+        let len = Math.sqrt((p2.x-p1.x)**2 + (p2.z-p1.z)**2);
+        segmentLengths.push(len); totalTrackLength += len;
+    }
+}
+initTrackLengths();
+
+let lastPlayerSegment = 0;
+function calcPlayerProgress() {
+    let bestDist=Infinity, bestProgress=0, bestSeg=lastPlayerSegment;
+    const px=carGroup.position.x, pz=carGroup.position.z;
+    for(let off=-7; off<=7; off++){
+        let i = ((lastPlayerSegment+off)%NODE_COUNT+NODE_COUNT)%NODE_COUNT;
+        let p1=npcPathNodes[i], p2=npcPathNodes[(i+1)%NODE_COUNT];
+        let len=segmentLengths[i], t=0;
+        if(len>0) t = ((px-p1.x)*(p2.x-p1.x)+(pz-p1.z)*(p2.z-p1.z))/(len*len);
+        t=Math.max(0,Math.min(1,t));
+        let projX=p1.x+t*(p2.x-p1.x), projZ=p1.z+t*(p2.z-p1.z);
+        let dist=Math.sqrt((px-projX)**2+(pz-projZ)**2);
+        if(dist<bestDist){ bestDist=dist; bestSeg=i; let acc=0; for(let k=0;k<i;k++) acc+=segmentLengths[k]; bestProgress=(acc+t*len)/totalTrackLength; }
+    }
+    lastPlayerSegment=bestSeg; return bestProgress;
+}
+
+function getPlayerRank() {
+    if(raceState===0||raceState===1) return 1;
+    let myRank=1;
+    playerProgress=(itemBulletTimer>0)?bulletProgress:calcPlayerProgress();
+    let pVal=playerLap+playerProgress;
+    npcs.forEach(n=>{ 
+        let npcVal = n.lap + n.progress;
+        if(npcVal > pVal + 0.001) myRank++; 
+    });
+    return myRank;
+}
+
+function getRandomItemByRank(rank) {
+    if(raceState!==2) {
+        const allItems = itemTypes.filter(isItemEnabled);
+        return allItems.length > 0 ? allItems[Math.floor(Math.random() * allItems.length)] : "キノコ";
+    }
+    const mode = currentItemSwitchMode;
+    const pool = getItemPoolForMode(mode, rank);
+    if (pool.length === 0) return "キノコ";
+    return pool[Math.floor(Math.random() * pool.length)];
+}
+
+function createEmojiSprite(emoji) {
+    const c = document.createElement('canvas'); c.width=128; c.height=128;
+    const x = c.getContext('2d');
+    x.font='80px sans-serif'; x.textAlign='center'; x.textBaseline='middle'; x.fillText(emoji,64,64);
+    const tex = new THREE.CanvasTexture(c);
+    const mat = new THREE.SpriteMaterial({ map: tex, transparent: true });
+    const sprite = new THREE.Sprite(mat); sprite.scale.set(4,4,1);
+    return sprite;
+}
+
+function spawnDroppedItem(type, pos) {
+    if(!type) return;
+    if (!isItemEnabled(type)) return;
+    const s = createEmojiSprite(getEmojiForItem(type));
+    const a = Math.random()*Math.PI*2, r = Math.random()*9+4;
+    s.position.set(pos.x+Math.cos(a)*r, 2.0, pos.z+Math.sin(a)*r);
+    s.scale.set(7,7,1);
+    scene.add(s); droppedItems.push({ mesh:s, type:type, timer:600 });
+}
+
+function dropPlayerItems() {
+    isItemRoulette=false; rouletteSlot=-1; fireFlowerAmmo=0;
+    if(isItemShielding && shieldShellMesh){ carGroup.remove(shieldShellMesh); shieldShellMesh=null; isItemShielding=false; if(heldItems[0]) spawnDroppedItem(heldItems[0], carGroup.position); heldItems[0]=null; }
+    else { if(heldItems[0]) spawnDroppedItem(heldItems[0], carGroup.position); heldItems[0]=null; }
+    if(heldItems[1]) spawnDroppedItem(heldItems[1], carGroup.position); heldItems[1]=null;
+    updateItemSlots();
+}
+
+function dropCoins() {
+    let lost = Math.min(coins, 3);
+    coins -= lost;
+    for(let i=0;i<lost;i++) spawnDroppedItem("コイン", carGroup.position);
+    document.getElementById("coin-text").innerText = `🪙 コイン: ${coins}/${gameCoinTarget}`;
+}
+
+function dropNpcItems(npc) {
+    if(npc.heldItem) spawnDroppedItem(npc.heldItem, npc.mesh.position);
+    npc.heldItem = null;
+}
+
+// --- コイン ---
+const coinGroup = new THREE.Group();
+const coinPositions = [
+    {x:0,z:200}, {x:10,z:120}, {x:-12,z:120},
+    {x:-150,z:-200}, {x:-300,z:-250},
+    {x:350,z:-200}, {x:200,z:0}, {x:200,z:180},
+    {x:0,z:-400}, {x:125,z:-400}
+];
+const coinsArray = [];
+coinPositions.forEach(p => {
+    const s = createEmojiSprite("🪙");
+    s.position.set(p.x, 2.5, p.z);
+    s.scale.set(5,5,1);
+    coinGroup.add(s);
+    coinsArray.push({ mesh:s, collected:false });
+});
+scene.add(coinGroup);
+
+function useCoinItem() {
+    let gain = Math.min(2, gameCoinTarget - coins);
+    coins += gain;
+    document.getElementById("coin-text").innerText = `🪙 コイン: ${coins}/${gameCoinTarget}`;
+    playTone(880,0.08,'sine',0.12);
+    setTimeout(()=>playTone(1100,0.1,'sine',0.1),60);
+    return true;
+}
+
+function performJumpAction() {
+    if(!isJumping || jumpActionTimer>0 || poleSpinTimer>0) return;
+    jumpActionTimer=30;
+    jumpRotX=(Math.random()>0.5?1:-1)*(0.18+Math.random()*0.15);
+    jumpRotZ=(Math.random()-0.5)*0.22;
+    jumpActionCount++; jumpActionCountThisJump++;
+    let bs=1.8; if(jumpActionCountThisJump>=5) bs=2.8; else if(jumpActionCountThisJump>=4) bs=2.5; else if(jumpActionCountThisJump>=3) bs=2.2; else if(jumpActionCountThisJump>=2) bs=2.0;
+    lastJumpActionBoost=bs; turboTimer=Math.max(turboTimer,20); speed=Math.max(speed,bs); soundBoost();
+    document.getElementById("turbo-ui").innerText = `✨ ジャンプアクション！ (${jumpActionCountThisJump}回目) ブースト: ${bs.toFixed(1)} ✨`;
+    document.getElementById("turbo-ui").style.color = "#ffeb3b";
+    document.getElementById("jump-count").style.display = "block";
+    document.getElementById("jump-count").innerHTML = `✨ ジャンプ: ${jumpActionCount}回 (今回${jumpActionCountThisJump}回)`;
+}
+
+function showHitNotification(msg, color) {
+    const t = document.getElementById("turbo-ui");
+    t.innerText = msg; t.style.color = color || "#ffaa00";
+    setTimeout(()=>{ if(t.innerText===msg) t.innerText=""; }, 1500);
+}
+
+function shiftItems() {
+    if(heldItems[0]===null && heldItems[1]!==null) { heldItems[0]=heldItems[1]; heldItems[1]=null; }
+    updateItemSlots();
+}
+
+// --- バナナ ---
+function placeBanana(pos, isPlayerOwned) {
+    const b = createBananaMesh();
+    b.position.copy(pos); b.position.y += 0.15;
+    scene.add(b);
+    kamekTraps.push({ mesh:b, type:'banana', pos:pos.clone(), timer:600, active:true, isPlayerOwned:isPlayerOwned||true });
+    playTone(400,0.1,'sine',0.08);
+}
+
+function throwBanana(pos, dir) {
+    const b = createBananaMesh();
+    b.position.copy(pos); b.position.y += 0.2;
+    scene.add(b);
+    kamekTraps.push({ mesh:b, type:'thrown_banana', pos:pos.clone(), direction:dir.clone(), speed:4+Math.random()*1.5, timer:120, active:true, isPlayerOwned:true });
+    playTone(500,0.08,'sine',0.1); setTimeout(()=>playTone(600,0.08,'sine',0.08),50);
+}
+
+// --- カメック ---
+function createKamekModel() {
+    const g = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.SphereGeometry(1.8, 8, 8), new THREE.MeshStandardMaterial({ color: 0x44aa44, emissive: 0x44aa44, emissiveIntensity: 0.1 }));
+    body.position.y=1.5; g.add(body);
+    const shell = new THREE.Mesh(new THREE.CylinderGeometry(2.5, 1.8, 1.0, 8), new THREE.MeshStandardMaterial({ color: 0x8B5A2B }));
+    shell.position.y=1.0; g.add(shell);
+    const head = new THREE.Mesh(new THREE.SphereGeometry(1.0, 8, 8), new THREE.MeshStandardMaterial({ color: 0x66cc66, emissive: 0x66cc66, emissiveIntensity: 0.05 }));
+    head.position.set(0, 2.4, 1.2); g.add(head);
+    const hat = new THREE.Mesh(new THREE.ConeGeometry(1.2, 0.9, 8), new THREE.MeshStandardMaterial({ color: 0x9944cc, emissive: 0x9944cc, emissiveIntensity: 0.1 }));
+    hat.position.set(0, 3.0, 1.2); g.add(hat);
+    const wand = new THREE.Mesh(new THREE.CylinderGeometry(0.15,0.15,1.8), new THREE.MeshStandardMaterial({ color: 0xdddddd, emissive: 0xff8800, emissiveIntensity: 0.2 }));
+    wand.position.set(1.0, 2.0, 1.8); wand.rotation.z=0.3; g.add(wand);
+    const aura = new THREE.Mesh(new THREE.SphereGeometry(2.5, 12, 12), new THREE.MeshBasicMaterial({ color: 0x9944cc, transparent: true, opacity: 0.15 }));
+    aura.position.y=1.5; g.add(aura);
+    g.userData.aura = aura;
+    return g;
+}
+
+function spawnKamek(index) {
+    const k = {
+        mesh: createKamekModel(),
+        progress: 0.1 + index * 0.3,
+        lap: 1,
+        speed: (baseMaxSpeed * 0.9) / totalTrackLength,
+        actionTimer: Math.floor(Math.random() * 120) + 60,
+        active: true
+    };
+    let p=Math.max(0,k.progress), seg=Math.floor(p*NODE_COUNT), sp=(p*NODE_COUNT)%1;
+    let sn=npcPathNodes[seg%NODE_COUNT], en=npcPathNodes[(seg+1)%NODE_COUNT];
+    let x=sn.x+(en.x-sn.x)*sp, z=sn.z+(en.z-sn.z)*sp;
+    let dx=-(en.z-sn.z), dz=(en.x-sn.x), len=Math.sqrt(dx*dx+dz*dz);
+    if(len>0){ dx/=len; dz/=len; }
+    let off = 10 + (index%2===0?8:-8);
+    k.mesh.position.set(x+dx*off,0,z+dz*off);
+    k.mesh.lookAt(en.x,0,en.z);
+    scene.add(k.mesh);
+    return k;
+}
+
+function updateKameks() {
+    if(raceState!==2) return;
+    for(let i=kameks.length-1; i>=0; i--){
+        const k = kameks[i];
+        if(!k.active) continue;
+        k.progress += k.speed;
+        if(k.progress>=1){ k.progress-=1; k.lap++; }
+        let p=Math.max(0,k.progress), seg=Math.floor(p*NODE_COUNT), sp=(p*NODE_COUNT)%1;
+        let sn=npcPathNodes[seg%NODE_COUNT], en=npcPathNodes[(seg+1)%NODE_COUNT];
+        let x=sn.x+(en.x-sn.x)*sp, z=sn.z+(en.z-sn.z)*sp;
+        let dx=-(en.z-sn.z), dz=(en.x-sn.x), len=Math.sqrt(dx*dx+dz*dz);
+        if(len>0){ dx/=len; dz/=len; }
+        let off=10+(i%2===0?8:-8);
+        k.mesh.position.set(x+dx*off,0,z+dz*off);
+        k.mesh.lookAt(en.x,0,en.z);
+        if(k.mesh.userData.aura) {
+            k.mesh.userData.aura.material.opacity = 0.1 + Math.sin(Date.now()*0.003 + i) * 0.08;
+            k.mesh.userData.aura.scale.setScalar(1 + Math.sin(Date.now()*0.002 + i) * 0.1);
+        }
+        k.actionTimer--;
+        if(k.actionTimer<=0){
+            k.actionTimer = Math.floor(Math.random()*120)+60;
+            let rni=Math.floor(Math.random()*NODE_COUNT);
+            let r1=npcPathNodes[rni%NODE_COUNT], r2=npcPathNodes[(rni+1)%NODE_COUNT];
+            let t=Math.random();
+            let posX=r1.x+(r2.x-r1.x)*t+(Math.random()-0.5)*40;
+            let posZ=r1.z+(r2.z-r1.z)*t+(Math.random()-0.5)*40;
+            let pos=new THREE.Vector3(Math.max(-370,Math.min(370,posX)),0,Math.max(-460,Math.min(460,posZ)));
+            let action=Math.floor(Math.random()*5);
+            if(action===0 && isItemEnabled("バナナ")){
+                const b=createBananaMesh(); b.position.copy(pos); b.position.y+=0.3; scene.add(b);
+                kamekTraps.push({ mesh:b, type:'banana', pos:pos.clone(), timer:600, active:true, isPlayerOwned:false });
+                playTone(400,0.1,'sine',0.05);
+            } else if(action===1 && isItemEnabled("ボム兵")){
+                const bm=new THREE.Mesh(new THREE.SphereGeometry(1.2,12,12), new THREE.MeshStandardMaterial({color:0x222222}));
+                bm.position.copy(pos); bm.position.y+=0.3; scene.add(bm);
+                kamekTraps.push({ mesh:bm, type:'placed_bomb', pos:pos.clone(), timer:180, active:true, exploded:false, isPlayerOwned:false });
+                playTone(200,0.2,'sawtooth',0.1);
+            } else if(action===2 && isItemEnabled("緑甲羅")){
+                const km=new THREE.Mesh(new THREE.SphereGeometry(1.8,8,8), new THREE.MeshStandardMaterial({color:0x44dd44, emissive:0x44dd44, emissiveIntensity:0.1}));
+                km.position.copy(pos); km.position.y+=0.6; scene.add(km);
+                const sm=new THREE.Mesh(new THREE.CylinderGeometry(2.2,1.0,1.0,8), new THREE.MeshStandardMaterial({color:0xcc8844}));
+                sm.position.copy(pos); sm.position.y+=0.4; scene.add(sm);
+                const g=new THREE.Group(); g.add(km); g.add(sm); g.position.copy(pos); scene.add(g);
+                let a=Math.random()*Math.PI*2; let md=new THREE.Vector3(Math.cos(a),0,Math.sin(a));
+                kamekTraps.push({ mesh:g, type:'koopa', pos:pos.clone(), direction:md, speed:0.6+Math.random()*0.3, timer:600, active:true, isPlayerOwned:false });
+                playTone(500,0.1,'square',0.08);
+            } else if(action===3 && isItemEnabled("キノコ")){
+                const km=new THREE.Mesh(new THREE.SphereGeometry(1.5,8,8), new THREE.MeshStandardMaterial({color:0x8B4513}));
+                km.position.copy(pos); km.position.y+=0.7; scene.add(km);
+                const shoe=new THREE.MeshStandardMaterial({color:0x222222});
+                const s1=new THREE.Mesh(new THREE.BoxGeometry(0.8,0.3,1.0), shoe); s1.position.set(pos.x-0.5,0.1,pos.z); scene.add(s1);
+                const s2=new THREE.Mesh(new THREE.BoxGeometry(0.8,0.3,1.0), shoe); s2.position.set(pos.x+0.5,0.1,pos.z); scene.add(s2);
+                const g=new THREE.Group(); g.add(km); g.add(s1); g.add(s2); g.position.copy(pos); scene.add(g);
+                let a=Math.random()*Math.PI*2; let md=new THREE.Vector3(Math.cos(a),0,Math.sin(a));
+                kamekTraps.push({ mesh:g, type:'kuribo', pos:pos.clone(), direction:md, speed:0.3+Math.random()*0.2, timer:500, active:true, wanderTimer:0, isPlayerOwned:false });
+                playTone(300,0.15,'sawtooth',0.06);
+            } else if(action===4 && isItemEnabled("赤甲羅")){
+                const wm=new THREE.Mesh(new THREE.SphereGeometry(1.5,8,8), new THREE.MeshStandardMaterial({color:0xff6633, emissive:0xff6633, emissiveIntensity:0.05}));
+                wm.position.copy(pos); wm.position.y+=0.7; scene.add(wm);
+                const hm=new THREE.Mesh(new THREE.SphereGeometry(1.0,8,8), new THREE.MeshStandardMaterial({color:0xff8844}));
+                hm.position.set(pos.x+0.8,1.0,pos.z); scene.add(hm);
+                const g=new THREE.Group(); g.add(wm); g.add(hm); g.position.copy(pos); scene.add(g);
+                kamekTraps.push({ mesh:g, type:'wanwan', pos:pos.clone(), direction:new THREE.Vector3(1,0,0), speed:0.8+Math.random()*0.4, timer:400, active:true, target:carGroup, isPlayerOwned:false });
+                playTone(600,0.1,'square',0.1);
+            }
+        }
+    }
+}
+
+function updateKamekTraps() {
+    const pp=carGroup.position, tb=document.getElementById("turbo-ui");
+    for(let i=kamekTraps.length-1; i>=0; i--){
+        const t=kamekTraps[i];
+        if(!t.active){ scene.remove(t.mesh); kamekTraps.splice(i,1); continue; }
+        t.timer--;
+        if(t.type==='banana'){
+            t.mesh.position.y=0.15 + Math.sin(Date.now()*0.005)*0.1;
+            if(pp.distanceTo(t.pos)<3.5){
+                if(itemStarTimer>0||itemMegaTimer>0||itemBulletTimer>0){ tb.innerText="🛡️ バナナ無効化！"; tb.style.color="#ffff00"; }
+                else if(playerHitInvincibleTimer<=0){
+                    if(gameMode==='survival'){ playerHP--; document.getElementById("hp-text").innerHTML=`❤️ HP: ${playerHP}/${maxHP}`; if(playerHP<=0){ isFinished=true; raceState=3; tb.innerText="💀 脱落！"; tb.style.color="#ff0000"; return; } }
+                    speed=0; turboTimer=0; isSquishedTimer=60;
+                    itemMushroomTimer=0; itemGoldenTimer=0; itemStarTimer=0; itemMegaTimer=0;
+                    tb.innerText="🍌 バナナでスリップ！"; tb.style.color="#ffcc00"; soundHit();
+                    showHitPopup("🍌 バナナ被弾！", "スリップ！", "#ffcc00");
+                }
+                t.active=false;
+            }
+            for(let j=0;j<npcs.length;j++){ if(t.pos.distanceTo(npcs[j].mesh.position)<3.0){ if(t.isPlayerOwned && npcs[j].isMega<=0 && npcs[j].isStar<=0){ npcs[j].isSquished=30; npcs[j].boostTimer=0; showHitNotification("🍌 バナナ命中！","#ffcc00"); showHitPopup("🍌 バナナ命中！", "NPCにヒット！", "#ffcc00"); t.active=false; break; } } }
+            if(t.timer<=0) t.active=false;
+        } else if(t.type==='thrown_banana'){
+            t.mesh.position.x += t.direction.x * t.speed;
+            t.mesh.position.z += t.direction.z * t.speed;
+            t.pos.copy(t.mesh.position);
+            t.mesh.position.y=0.2 + Math.sin(Date.now()*0.01)*0.1;
+            t.mesh.rotation.z += 0.1;
+            if(t.mesh.position.x<-370||t.mesh.position.x>370||t.mesh.position.z<-470||t.mesh.position.z>470) t.active=false;
+            if(pp.distanceTo(t.pos)<3.0){
+                if(itemStarTimer>0||itemMegaTimer>0||itemBulletTimer>0){ tb.innerText="🛡️ バナナ無効化！"; tb.style.color="#ffff00"; }
+                else if(playerHitInvincibleTimer<=0){
+                    if(gameMode==='survival'){ playerHP--; document.getElementById("hp-text").innerHTML=`❤️ HP: ${playerHP}/${maxHP}`; if(playerHP<=0){ isFinished=true; raceState=3; tb.innerText="💀 脱落！"; tb.style.color="#ff0000"; return; } }
+                    speed=0; turboTimer=0; isSquishedTimer=60;
+                    itemMushroomTimer=0; itemGoldenTimer=0; itemStarTimer=0; itemMegaTimer=0;
+                    tb.innerText="🍌 投げられたバナナでスリップ！"; tb.style.color="#ffcc00"; soundHit();
+                    showHitPopup("🍌 バナナ被弾！", "投げられた！", "#ffcc00");
+                }
+                t.active=false;
+            }
+            for(let j=0;j<npcs.length;j++){ if(t.isPlayerOwned && t.pos.distanceTo(npcs[j].mesh.position)<3.0){ if(npcs[j].isMega<=0 && npcs[j].isStar<=0){ npcs[j].isSquished=30; npcs[j].boostTimer=0; showHitNotification("🍌 バナナ命中！","#ffcc00"); showHitPopup("🍌 バナナ命中！", "NPCにヒット！", "#ffcc00"); t.active=false; break; } } }
+            if(t.timer<=0) t.active=false;
+        } else if(t.type==='placed_bomb'){
+            if(t.timer<60) t.mesh.material.color.setHex((Math.floor(Date.now()/100)%2===0)?0xff0000:0x222222);
+            if(t.timer<=0){
+                createExplosion(t.pos); soundHit(); 
+                const radius = 40;
+                if(pp.distanceTo(t.pos)<radius){
+                    if(itemStarTimer>0||itemMegaTimer>0||itemBulletTimer>0){ tb.innerText="🛡️ 爆発無効化！"; tb.style.color="#ffff00"; }
+                    else if(playerHitInvincibleTimer<=0){
+                        if(gameMode==='survival'){ playerHP-=2; document.getElementById("hp-text").innerHTML=`❤️ HP: ${playerHP}/${maxHP}`; if(playerHP<=0){ isFinished=true; raceState=3; tb.innerText="💀 脱落！"; tb.style.color="#ff0000"; return; } }
+                        isSquishedTimer=90; speed=0; turboTimer=0; playerHitInvincibleTimer=180;
+                        itemMushroomTimer=0; itemGoldenTimer=0; itemStarTimer=0; itemMegaTimer=0;
+                        dropCoins(); dropCoins();
+                        tb.innerText="💥 カメックの爆弾被弾！"; tb.style.color="#ff8800"; showShellWarning("💥 爆発被弾！","#ff8800");
+                        showHitPopup("💥 爆発被弾！", "カメックの罠！", "#ff8800");
+                    }
+                }
+                npcs.forEach(n=>{ if(t.pos.distanceTo(n.mesh.position)<radius && n.isMega<=0 && n.isStar<=0){ n.isSquished=120; n.boostTimer=0; const c=Math.floor(Math.random()*2)+1; for(let k=0;k<c;k++) spawnDroppedItem("コイン", n.mesh.position); } });
+                t.active=false;
+            }
+            if(pp.distanceTo(t.pos)<3.0 && t.timer>0) t.timer=0;
+        } else if(t.type==='koopa'){
+            t.mesh.position.x += t.direction.x * t.speed;
+            t.mesh.position.z += t.direction.z * t.speed;
+            t.pos.copy(t.mesh.position);
+            if(t.mesh.position.x<-370||t.mesh.position.x>370) t.direction.x *= -1;
+            if(t.mesh.position.z<-470||t.mesh.position.z>470) t.direction.z *= -1;
+            if(pp.distanceTo(t.mesh.position)<3.5){
+                if(itemStarTimer>0||itemMegaTimer>0||itemBulletTimer>0){ tb.innerText="🛡️ ノコノコ無効化！"; tb.style.color="#ffff00"; }
+                else if(playerHitInvincibleTimer<=0){
+                    if(gameMode==='survival'){ playerHP--; document.getElementById("hp-text").innerHTML=`❤️ HP: ${playerHP}/${maxHP}`; if(playerHP<=0){ isFinished=true; raceState=3; tb.innerText="💀 脱落！"; tb.style.color="#ff0000"; return; } }
+                    isSquishedTimer=60; speed=0; turboTimer=0; playerHitInvincibleTimer=180;
+                    itemMushroomTimer=0; itemGoldenTimer=0; itemStarTimer=0; itemMegaTimer=0;
+                    dropCoins(); tb.innerText="🐢 ノコノコに衝突！"; tb.style.color="#ff6633"; showShellWarning("🐢 ノコノコ被弾！","#ff6633");
+                    showHitPopup("🐢 ノコノコ被弾！", "カメックの召喚", "#ff6633");
+                }
+                t.active=false;
+            }
+            if(t.timer<=0) t.active=false;
+        } else if(t.type==='kuribo'){
+            t.wanderTimer=(t.wanderTimer||0)+1;
+            if(t.wanderTimer>60){ t.wanderTimer=0; let a=Math.random()*Math.PI*2; t.direction.set(Math.cos(a),0,Math.sin(a)); }
+            t.mesh.position.x += t.direction.x * t.speed;
+            t.mesh.position.z += t.direction.z * t.speed;
+            t.pos.copy(t.mesh.position);
+            if(t.mesh.position.x<-370||t.mesh.position.x>370) t.direction.x *= -1;
+            if(t.mesh.position.z<-470||t.mesh.position.z>470) t.direction.z *= -1;
+            if(pp.distanceTo(t.mesh.position)<3.0){
+                if(itemStarTimer>0||itemMegaTimer>0||itemBulletTimer>0){ tb.innerText="🛡️ クリボー無効化！"; tb.style.color="#ffff00"; }
+                else if(playerHitInvincibleTimer<=0){
+                    if(gameMode==='survival'){ playerHP--; document.getElementById("hp-text").innerHTML=`❤️ HP: ${playerHP}/${maxHP}`; if(playerHP<=0){ isFinished=true; raceState=3; tb.innerText="💀 脱落！"; tb.style.color="#ff0000"; return; } }
+                    isSquishedTimer=40; speed=0; turboTimer=0; playerHitInvincibleTimer=120;
+                    itemMushroomTimer=0; itemGoldenTimer=0; itemStarTimer=0; itemMegaTimer=0;
+                    dropCoins(); tb.innerText="🍄 クリボーに衝突！"; tb.style.color="#8B4513"; showShellWarning("🍄 クリボー被弾！","#8B4513");
+                    showHitPopup("🍄 クリボー被弾！", "カメックの召喚", "#8B4513");
+                }
+                t.active=false;
+            }
+            if(t.timer<=0) t.active=false;
+        } else if(t.type==='wanwan'){
+            let d=new THREE.Vector3().subVectors(pp, t.mesh.position); d.y=0; let dist=d.length();
+            if(dist>0.5){ d.normalize(); t.mesh.position.x += d.x * t.speed; t.mesh.position.z += d.z * t.speed; }
+            t.pos.copy(t.mesh.position);
+            if(t.mesh.position.x<-370||t.mesh.position.x>370) t.speed *= -1;
+            if(t.mesh.position.z<-470||t.mesh.position.z>470) t.speed *= -1;
+            if(dist<3.5){
+                if(itemStarTimer>0||itemMegaTimer>0||itemBulletTimer>0){ tb.innerText="🛡️ ワンワン無効化！"; tb.style.color="#ffff00"; }
+                else if(playerHitInvincibleTimer<=0){
+                    if(gameMode==='survival'){ playerHP-=2; document.getElementById("hp-text").innerHTML=`❤️ HP: ${playerHP}/${maxHP}`; if(playerHP<=0){ isFinished=true; raceState=3; tb.innerText="💀 脱落！"; tb.style.color="#ff0000"; return; } }
+                    isSquishedTimer=50; speed=0; turboTimer=0; playerHitInvincibleTimer=150;
+                    itemMushroomTimer=0; itemGoldenTimer=0; itemStarTimer=0; itemMegaTimer=0;
+                    dropCoins(); dropCoins(); tb.innerText="🐕 ワンワンに噛まれた！"; tb.style.color="#ff6633"; showShellWarning("🐕 ワンワン被弾！","#ff6633");
+                    showHitPopup("🐕 ワンワン被弾！", "カメックの召喚", "#ff6633");
+                }
+                t.active=false;
+            }
+            if(t.timer<=0) t.active=false;
+        }
+    }
+}
+
+// --- ★ プレイヤー用カメックの更新（複数対応） ---
+function updatePlayerKameks() {
+    for (let idx = playerKameks.length - 1; idx >= 0; idx--) {
+        const k = playerKameks[idx];
+        if (!k) continue;
+        
+        k.life -= 1/60;
+        
+        if (k.life <= 0) {
+            const tb = document.getElementById("turbo-ui");
+            tb.innerText = `💥 カメック${playerKameks.length > 1 ? '#'+(idx+1) : ''}が爆弾を撒き散らした！`;
+            tb.style.color = "#ff4400";
+            const pos = k.mesh.position.clone();
+            const bombCount = 20 + Math.floor(Math.random() * 25);
+            for (let i = 0; i < bombCount; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const dist = 3 + Math.random() * 30;
+                const offsetX = Math.cos(angle) * dist;
+                const offsetZ = Math.sin(angle) * dist;
+                const bombPos = new THREE.Vector3(pos.x + offsetX, 0.3, pos.z + offsetZ);
+                const bm = new THREE.Mesh(new THREE.SphereGeometry(1.0, 10, 10), new THREE.MeshStandardMaterial({ color: 0x222222 }));
+                bm.position.copy(bombPos);
+                scene.add(bm);
+                kamekTraps.push({
+                    mesh: bm,
+                    type: 'placed_bomb',
+                    pos: bombPos.clone(),
+                    timer: 15 + Math.floor(Math.random() * 45),
+                    active: true,
+                    exploded: false,
+                    isPlayerOwned: true
+                });
+                playTone(180 + Math.random() * 120, 0.1, 'sawtooth', 0.08);
+            }
+            scene.remove(k.mesh);
+            if (k.auraMesh) {
+                scene.remove(k.auraMesh);
+                scene.remove(k.sparkMesh1);
+                scene.remove(k.sparkMesh2);
+            }
+            playerKameks.splice(idx, 1);
+            continue;
+        }
+        
+        const speedFactor = 1.3 + Math.random() * 0.3;
+        const progressSpeed = (baseMaxSpeed * speedFactor) / totalTrackLength;
+        k.progress += progressSpeed;
+        if (k.progress >= 1) k.progress -= 1;
+        
+        let p = Math.max(0, k.progress);
+        let seg = Math.floor(p * NODE_COUNT);
+        let sp = (p * NODE_COUNT) % 1;
+        let sn = npcPathNodes[seg % NODE_COUNT];
+        let en = npcPathNodes[(seg + 1) % NODE_COUNT];
+        let x = sn.x + (en.x - sn.x) * sp;
+        let z = sn.z + (en.z - sn.z) * sp;
+        let dx = -(en.z - sn.z);
+        let dz = (en.x - sn.x);
+        let len = Math.sqrt(dx*dx + dz*dz);
+        if (len > 0) { dx /= len; dz /= len; }
+        let off = 8 + Math.sin(Date.now() * 0.001 + k.progress * 10 + idx * 1.5) * 4;
+        k.mesh.position.set(x + dx * off, 0.5, z + dz * off);
+        k.mesh.lookAt(en.x, 0, en.z);
+        
+        if (k.auraMesh) {
+            k.auraMesh.position.copy(k.mesh.position);
+            k.auraMesh.position.y = 2.0;
+            k.auraMesh.rotation.y += 0.08;
+            k.sparkMesh1.position.set(
+                k.mesh.position.x + Math.sin(Date.now() * 0.01 + idx + 1) * 3.0,
+                1.0 + Math.sin(Date.now() * 0.02 + idx) * 1.8,
+                k.mesh.position.z + Math.cos(Date.now() * 0.01 + idx + 1) * 3.0
+            );
+            k.sparkMesh2.position.set(
+                k.mesh.position.x + Math.sin(Date.now() * 0.01 + idx + 3) * 3.5,
+                1.0 + Math.cos(Date.now() * 0.02 + idx + 2) * 1.8,
+                k.mesh.position.z + Math.cos(Date.now() * 0.01 + idx + 3) * 3.5
+            );
+        }
+        
+        const tb = document.getElementById("turbo-ui");
+        tb.innerText = `🧙 カメック${playerKameks.length > 1 ? ' x'+playerKameks.length : ''}が暴走中！ 💨`;
+        tb.style.color = "#ff8800";
+    }
+}
+
+// ★ プレイヤーカメック召喚（プレイヤーの15m前からスタート、複数可）
+function useKamekItem() {
+    const tb = document.getElementById("turbo-ui");
+    if (raceState !== 2) {
+        tb.innerText = "🧙 レース中のみ使用可能！";
+        tb.style.color = "#ff4444";
+        return;
+    }
+    
+    if (!isItemEnabled("カメック")) {
+        tb.innerText = "🚫 カメックは無効です";
+        tb.style.color = "#ff3333";
+        return;
+    }
+    
+    const kamekMesh = createKamekModel();
+    kamekMesh.scale.set(1.8, 1.8, 1.8);
+    
+    // プレイヤーの15m前からスタート (確定)
+    const playerPos = carGroup.position.clone();
+    const fwd = new THREE.Vector3(-Math.sin(carGroup.rotation.y), 0, -Math.cos(carGroup.rotation.y)).normalize();
+    const startPos = playerPos.clone().addScaledVector(fwd, 15);
+    
+    // コース上の最近接点を探す
+    let bestDist = Infinity, bestProgress = 0;
+    for (let i = 0; i < NODE_COUNT; i++) {
+        let p1 = npcPathNodes[i], p2 = npcPathNodes[(i+1) % NODE_COUNT];
+        let len = segmentLengths[i];
+        if (len === 0) continue;
+        let t = ((startPos.x - p1.x) * (p2.x - p1.x) + (startPos.z - p1.z) * (p2.z - p1.z)) / (len * len);
+        t = Math.max(0, Math.min(1, t));
+        let projX = p1.x + t * (p2.x - p1.x), projZ = p1.z + t * (p2.z - p1.z);
+        let dist = Math.sqrt((startPos.x - projX) ** 2 + (startPos.z - projZ) ** 2);
+        if (dist < bestDist) {
+            bestDist = dist;
+            let acc = 0;
+            for (let k = 0; k < i; k++) acc += segmentLengths[k];
+            bestProgress = (acc + t * len) / totalTrackLength;
+        }
+    }
+    
+    // 少しだけ進んだ位置からスタート
+    let startProgress = bestProgress + 0.02 + Math.random() * 0.03;
+    if (startProgress >= 1) startProgress -= 1;
+    
+    let p = startProgress;
+    let seg = Math.floor(p * NODE_COUNT);
+    let sp = (p * NODE_COUNT) % 1;
+    let sn = npcPathNodes[seg % NODE_COUNT];
+    let en = npcPathNodes[(seg + 1) % NODE_COUNT];
+    let x = sn.x + (en.x - sn.x) * sp;
+    let z = sn.z + (en.z - sn.z) * sp;
+    let dx = -(en.z - sn.z);
+    let dz = (en.x - sn.x);
+    let len = Math.sqrt(dx*dx + dz*dz);
+    if (len > 0) { dx /= len; dz /= len; }
+    let off = 6 + Math.random() * 4;
+    kamekMesh.position.set(x + dx * off, 0.5, z + dz * off);
+    kamekMesh.lookAt(en.x, 0, en.z);
+    scene.add(kamekMesh);
+    
+    const auraMat = new THREE.MeshBasicMaterial({ color: 0x9944cc, transparent: true, opacity: 0.4, side: THREE.DoubleSide });
+    const aura = new THREE.Mesh(new THREE.SphereGeometry(5.0, 12, 12), auraMat);
+    aura.position.copy(kamekMesh.position);
+    aura.position.y = 2.0;
+    scene.add(aura);
+    
+    const sparkMat = new THREE.MeshBasicMaterial({ color: 0xff8800 });
+    const spark1 = new THREE.Mesh(new THREE.SphereGeometry(0.7, 6, 6), sparkMat);
+    spark1.position.copy(kamekMesh.position);
+    spark1.position.y = 0.8;
+    scene.add(spark1);
+    const spark2 = new THREE.Mesh(new THREE.SphereGeometry(0.7, 6, 6), sparkMat);
+    spark2.position.copy(kamekMesh.position);
+    spark2.position.y = 0.8;
+    scene.add(spark2);
+    
+    playerKameks.push({
+        mesh: kamekMesh,
+        progress: startProgress,
+        life: 8.0 + Math.random() * 4.0,
+        auraMesh: aura,
+        sparkMesh1: spark1,
+        sparkMesh2: spark2
+    });
+    
+    tb.innerText = `🧙 カメックを召喚！ (${playerKameks.length}体目) 💨`;
+    tb.style.color = "#ff8800";
+    soundItem();
+    heldItems[0] = heldItems[1];
+    heldItems[1] = null;
+    shiftItems();
+    updateItemSlots();
+}
+
+// --- ホーム画面制御 ---
+document.querySelectorAll('.mode-card').forEach(c => {
+    c.addEventListener('click', ()=>{
+        document.querySelectorAll('.mode-card').forEach(c2=>c2.classList.remove('selected'));
+        c.classList.add('selected'); gameMode=c.dataset.mode;
+        currentItemSwitchMode = 'NORMAL';
+    });
+});
+document.querySelector('.mode-card[data-mode="endurance"]').classList.add('selected');
+
+setupConfigPanel();
+updateConfigPanelUI();
+
+document.getElementById('start-game-btn').addEventListener('click', ()=>{
+    if(gameStarted) return;
+    gameStarted = true;
+    document.getElementById('home-screen').style.display = 'none';
+    initAudio();
+    let tl=20, nc=11, ct=10;
+    switch(gameMode){
+        case 'endurance': tl=20; nc=11; ct=10; break;
+        case 'timeattack': tl=3; nc=0; ct=10; break;
+        case 'battle': tl=999; nc=11; ct=30; break;
+        case 'survival': tl=999; nc=11; ct=10; break;
+    }
+    startRaceCustom(tl, nc, ct);
+});
+
+function startRaceCustom(tl, nc, ct){
+    gameTargetLaps=tl; gameNpcCount=nc; gameCoinTarget=ct;
+    raceStartTime=performance.now(); timeAttackRunning=false; timeAttackCurrentTime=0;
+    playerHP=maxHP; raceEndTimer=0; isReturningToHome=false;
+    currentItemSwitchMode = 'NORMAL';
+    
+    document.getElementById("hp-text").style.display=(gameMode==='survival')?'block':'none';
+    document.getElementById("hp-text").innerHTML=`❤️ HP: ${playerHP}/${maxHP}`;
+    document.getElementById("time-display").style.display=(gameMode==='timeattack')?'block':'none';
+    document.getElementById("best-time-display").style.display=(gameMode==='timeattack')?'block':'none';
+    if(gameMode==='timeattack' && timeAttackBestTime){
+        document.getElementById("best-time-display").innerHTML = `🏆 ベスト: ${formatTime(parseFloat(timeAttackBestTime))}`;
+    }
+    
+    while(npcs.length > nc){ const n=npcs.pop(); scene.remove(n.mesh); }
+    while(npcs.length < nc){
+        const w=["軽い","普通","重い"][Math.floor(Math.random()*3)];
+        const st=weightStats[w]; const col={"軽い":0x3388ff,"普通":0xffcc00,"重い":0xff3333}[w];
+        npcs.push({
+            color:col, weight:w, mesh:new THREE.Group(), progress:0, lap:1,
+            isSquished:0, isMega:0, isStar:0, heldItem:null, itemUseTimer:0, boostTimer:0,
+            mass:st.mass, topSpeedMul:(0.7+Math.random()*0.5)*st.maxSpeedMul,
+            accelMul:(0.7+Math.random()*0.5)*st.accelMul,
+            velocityX:0, velocityZ:0, isCrashing:false, crashTimer:0,
+            pickupCooldown:0,
+            lastUsedItem: null
+        });
+        const ch=new THREE.Mesh(new THREE.BoxGeometry(2.4,1,3.4), new THREE.MeshStandardMaterial({color:col}));
+        ch.position.y=0.5; npcs[npcs.length-1].mesh.add(ch); scene.add(npcs[npcs.length-1].mesh); npcs[npcs.length-1].chassis=ch;
+    }
+    
+    kameks.forEach(k=>scene.remove(k.mesh)); kameks.length=0;
+    kamekTraps.forEach(t=>scene.remove(t.mesh)); kamekTraps.length=0;
+    playerKameks.forEach(k => {
+        scene.remove(k.mesh);
+        if (k.auraMesh) {
+            scene.remove(k.auraMesh);
+            scene.remove(k.sparkMesh1);
+            scene.remove(k.sparkMesh2);
+        }
+    });
+    playerKameks = [];
+    
+    itemBoxes.forEach(b=>scene.remove(b.mesh)); itemBoxes.length=0;
+    if(gameMode==='timeattack'){
+        itemBoxPositions.forEach(p=>{
+            const c=createEmojiSprite("🪙");
+            c.position.set(p.x, 2.0, p.z);
+            c.scale.set(4,4,1);
+            scene.add(c);
+            coinsArray.push({ mesh:c, collected:false, pos:p });
+        });
+    } else {
+        itemBoxPositions.forEach(p=>{
+            const box=new THREE.Mesh(boxGeo, boxMat);
+            box.position.set(p.x, 2, p.z);
+            scene.add(box);
+            itemBoxes.push({ mesh:box, respawnTimer:0 });
+        });
+    }
+    
+    startRaceGridPlacement();
+    document.getElementById("coin-text").innerText = `🪙 コイン: 0/${gameCoinTarget}`;
+    raceState=1; countdownTime=4000; rocketTimer=0; rocketFailed=false; lastCenterText="";
+}
+
+function startRaceGridPlacement() {
+    initAudio();
+    speed=0; playerLap=1; midCheckpointPassed=false; isFinished=false; isSquishedTimer=0; carY=0; jumpVelocity=0; lastPlayerSegment=0;
+    hasJumpActioned=false; jumpActionTimer=0; carGroup.scale.set(1,1,1); carModel.rotation.set(0,0,0);
+    heldItems=[null,null]; isItemRoulette=false; rouletteSlot=-1; itemMushroomTimer=0; itemMegaTimer=0; itemGoldenTimer=0; itemStarTimer=0; itemBulletTimer=0; bulletProgress=0; jumpChargeTime=0;
+    isWallRiding=false; wallRideSide=0; wallKickVelocityX=0; wallKickIgnoreTimer=0; poleSpinTimer=0;
+    wallKickCount=0; lastSecondsInt=-1; playerHitInvincibleTimer=0;
+    coins=0; playerProgress=0; tripleMushroomCount=0;
+    featherJumpCount=0; itemFeatherTimer=0;
+    warningTimer=0; warningMessage="";
+    fireFlowerAmmo=0; fireballCooldown=0;
+    fireballs.forEach(f=>scene.remove(f.mesh)); fireballs.length=0;
+    bombs.forEach(b=>scene.remove(b.mesh)); bombs.length=0;
+    carModel.material.transparent=false; carModel.material.opacity=1.0;
+    updatePlayerColor();
+    if(shieldShellMesh){ carGroup.remove(shieldShellMesh); shieldShellMesh=null; }
+    isItemShielding=false;
+    droppedItems.forEach(d=>scene.remove(d.mesh)); droppedItems.length=0;
+    explosions.forEach(e=>scene.remove(e.mesh)); explosions.length=0;
+    coinsArray.forEach(c=>{ c.mesh.visible=true; c.collected=false; });
+    scatteredCoins.forEach(s=>scene.remove(s.mesh)); scatteredCoins.length=0;
+    document.getElementById("coin-text").innerText = `🪙 コイン: 0/${gameCoinTarget}`;
+    updateItemSlots();
+    carGroup.position.set(0,0,130); carGroup.rotation.set(0,0,0); currentCameraPos.set(0,7,170);
+    npcs.forEach((n,i)=>{ n.lap=1; n.progress=-0.006*(i+1); n.isSquished=0; n.isMega=0; n.isStar=0; n.heldItem=null; n.boostTimer=0; n.velocityX=0; n.velocityZ=0; n.isCrashing=false; n.crashTimer=0; n.pickupCooldown=0; n.lastUsedItem=null; n.mesh.scale.set(1,1,1); n.mesh.position.set((i%2===0?7:-7),0,135+i*9+15); n.mesh.rotation.set(0,0,0); });
+    jumpActionCount=0; jumpActionCountThisJump=0; isJumping=false; canChargeJump=true; lastJumpActionBoost=0;
+    document.getElementById("jump-count").style.display="none";
+    document.getElementById("jump-count").innerHTML = `✨ ジャンプ: 0回 ✨`;
+    incomingEl.style.display='none'; blueShellEl.style.display='none';
+    lookBack=false; isMouseDown=false; isChargingBomb=false; bombChargeTime=0;
+    
+    kameks.forEach(k=>scene.remove(k.mesh)); kameks.length=0;
+    kamekTraps.forEach(t=>scene.remove(t.mesh)); kamekTraps.length=0;
+    playerKameks.forEach(k => {
+        scene.remove(k.mesh);
+        if (k.auraMesh) {
+            scene.remove(k.auraMesh);
+            scene.remove(k.sparkMesh1);
+            scene.remove(k.sparkMesh2);
+        }
+    });
+    playerKameks = [];
+    
+    if(gameMode==='timeattack'){
+        heldItems[0]="キノコ3";
+        tripleMushroomCount=3;
+        updateItemSlots();
+        document.getElementById("turbo-ui").innerText = "🍄🍄🍄 キノコ3 配備！";
+        document.getElementById("turbo-ui").style.color = "#ffaa00";
+    }
+}
+
+function updateItemUI() {
+    updateItemSlots();
+}
+
+function showShellWarning(msg,color){ warningMessage=msg; warningColor=color||"#ff3333"; warningTimer=120; }
+
+function updateIncomingWarnings() {
+    const all=[], pp=carGroup.position; let hasBlue=false;
+    shells.forEach(s=>{
+        if(!s.mesh || s.isPlayerOwned) return;
+        const d=pp.distanceTo(s.mesh.position);
+        if(d<200){
+            let type="甲羅", emoji="🟢";
+            if(s.type==="red"||s.type==="red_to_player") emoji="🔴";
+            else if(s.type==="blue"){ emoji="💙"; if(s.target===carGroup||s.target===carGroup.mesh) hasBlue=true; }
+            all.push({ type:emoji+type, distance:d, pos:s.mesh.position.clone(), rawType:s.type, isBlueTargetingPlayer:(s.type==="blue"&&(s.target===carGroup||s.target===carGroup.mesh)) });
+        }
+    });
+    fireballs.forEach(f=>{ if(!f.mesh || f.isPlayerOwned) return; const d=pp.distanceTo(f.mesh.position); if(d<200) all.push({ type:"🔥火の玉", distance:d, pos:f.mesh.position.clone(), rawType:"fireball", isBlueTargetingPlayer:false }); });
+    bombs.forEach(b=>{ if(!b.mesh || b.isPlayerOwned) return; const d=pp.distanceTo(b.mesh.position); if(d<200) all.push({ type:"💣ボム", distance:d, pos:b.mesh.position.clone(), rawType:"bomb", isBlueTargetingPlayer:false }); });
+    if(hasBlue){ blueShellEl.style.display='block'; const bs=all.find(p=>p.isBlueTargetingPlayer); if(bs) blueShellSub.textContent=`⚠️ まで ${Math.round(bs.distance)}m`; else blueShellSub.textContent='⚠️ 回避！ ⚠️'; document.getElementById('rank-text').classList.add('rank-warning'); }
+    else { blueShellEl.style.display='none'; document.getElementById('rank-text').classList.remove('rank-warning'); }
+    const nonBlue=all.filter(p=>!p.isBlueTargetingPlayer).sort((a,b)=>a.distance-b.distance);
+    if(nonBlue.length>0){ const n=nonBlue[0]; incomingEl.style.display='block'; incomingMain.textContent=`⚠️ ${n.type} 接近！`; incomingSub.textContent=`📏 まで ${Math.round(n.distance)}m (${nonBlue.length}個)`; }
+    else incomingEl.style.display='none';
+}
+
+// --- ルーレット早切り機能 (修正) ---
+function tryRouletteEarlyCut() {
+    if (!isItemRoulette) return false;
+    if (rouletteSlot === -1) return false;
+    
+    // ルーレットを強制終了してアイテムを確定
+    isItemRoulette = false;
+    soundItem();
+    let newItem = getRandomItemByRank(getPlayerRank());
+    if (newItem === "ファイヤーフラワー") fireFlowerAmmo = 8;
+    if (rouletteSlot === 0) {
+        heldItems[0] = newItem;
+        // スロット1の表示を即時更新
+        const slot1 = document.getElementById('slot-1');
+        slot1.querySelector('.slot-emoji').textContent = getEmojiForItem(newItem);
+        slot1.querySelector('.slot-label').textContent = newItem;
+        slot1.querySelector('.slot-sub').textContent = 'Shift/クリック';
+        slot1.classList.add('has-item');
+    } else if (rouletteSlot === 1) {
+        heldItems[1] = newItem;
+        const slot2 = document.getElementById('slot-2');
+        slot2.querySelector('.slot-emoji').textContent = getEmojiForItem(newItem);
+        slot2.querySelector('.slot-label').textContent = newItem;
+        slot2.querySelector('.slot-sub').textContent = '控え';
+        slot2.classList.add('has-item');
+    } else {
+        spawnDroppedItem(newItem, carGroup.position);
+    }
+    rouletteSlot = -1;
+    shiftItems();
+    updateItemSlots();
+    document.getElementById("turbo-ui").innerText = `🎯 ルーレット早切り！ ${getEmojiForItem(newItem)}`;
+    document.getElementById("turbo-ui").style.color = "#ffd700";
+    setTimeout(() => {
+        if (document.getElementById("turbo-ui").innerText.includes("早切り")) {
+            document.getElementById("turbo-ui").innerText = "";
+        }
+    }, 1200);
+    return true;
+}
+
+// --- 背面投げ (Zキー) ---
+function useItemBackward() {
+    const tb=document.getElementById("turbo-ui");
+    let item=heldItems[0];
+    if(!item || (itemBulletTimer>0 && item!=="キラー")) return;
+    
+    // ルーレット中の早切り (スロット1)
+    if (isItemRoulette && rouletteSlot === 0) {
+        tryRouletteEarlyCut();
+        return;
+    }
+
+    if (item==="ボム兵" && isChargingBomb) {
+        tb.innerText = "💣 チャージ中です！ 離して投げてください";
+        tb.style.color = "#ff8800";
+        return;
+    }
+
+    if(item==="コインボックス"){
+        let gain=Math.min(5, gameCoinTarget-coins);
+        coins+=gain;
+        document.getElementById("coin-text").innerText = `🪙 コイン: ${coins}/${gameCoinTarget}`;
+        soundCoin();
+        tb.innerText=`🔙📦🪙 コインボックス！ +${gain}枚！`;
+        tb.style.color="#ffd700";
+        for(let i=0;i<10;i++){ const a=Math.random()*Math.PI*2, d=2+Math.random()*5; const p=new THREE.Vector3(carGroup.position.x+Math.cos(a)*d,0.5,carGroup.position.z+Math.sin(a)*d); const c=createEmojiSprite("🪙"); c.position.copy(p); c.scale.set(3,3,1); scene.add(c); scatteredCoins.push({ mesh:c, pos:p.clone(), velocity:new THREE.Vector3(Math.cos(a)*(0.5+Math.random()*1.0),0.3+Math.random()*0.5,Math.sin(a)*(0.5+Math.random()*1.0)), timer:300, active:true }); }
+        heldItems[0]=heldItems[1]; heldItems[1]=null; shiftItems(); updateItemSlots(); return;
+    }
+
+    if(item==="バナナ"){
+        if(!isItemEnabled("バナナ")) { tb.innerText="🚫 バナナは無効です"; tb.style.color="#ff3333"; return; }
+        const pos=carGroup.position.clone(); pos.y+=0.3;
+        const dir=new THREE.Vector3(Math.sin(carGroup.rotation.y),0,Math.cos(carGroup.rotation.y)).normalize();
+        pos.addScaledVector(dir,1.5);
+        const b=createBananaMesh();
+        b.position.copy(pos); b.position.y+=0.2;
+        scene.add(b);
+        kamekTraps.push({ mesh:b, type:'thrown_banana', pos:pos.clone(), direction:dir.clone(), speed:3.5+Math.random()*1.0, timer:120, active:true, isPlayerOwned:true });
+        playTone(500,0.08,'sine',0.1); setTimeout(()=>playTone(600,0.08,'sine',0.08),50);
+        tb.innerText="🔙🍌 バナナを後ろに投げた！"; tb.style.color="#ffcc00";
+        heldItems[0]=heldItems[1]; heldItems[1]=null; shiftItems(); updateItemSlots(); return;
+    }
+
+    if(item==="羽"){
+        if(!isItemEnabled("羽")) { tb.innerText="🚫 羽は無効です"; tb.style.color="#ff3333"; return; }
+        if(carY<=0.5) jumpVelocity=0.55;
+        else jumpVelocity=Math.max(jumpVelocity+0.25,0.7);
+        featherJumpCount++; soundBoost();
+        tb.innerText=`🔙🪶 羽！ ${featherJumpCount}回目`; tb.style.color="#88ddff";
+        itemFeatherTimer=60;
+        heldItems[0]=heldItems[1]; heldItems[1]=null; shiftItems(); updateItemSlots(); return;
+    }
+
+    if(item==="キノコ3"){
+        if(!isItemEnabled("キノコ")) { tb.innerText="🚫 キノコは無効です"; tb.style.color="#ff3333"; return; }
+        if(tripleMushroomCount===0) tripleMushroomCount=3;
+        if(tripleMushroomCount>0){ itemMushroomTimer=80; soundBoost(); tripleMushroomCount--; tb.innerText=`🔙🍄 背面ダッシュ！ (残り${tripleMushroomCount}回)`; tb.style.color="#ffaa00"; if(tripleMushroomCount===0){ heldItems[0]=heldItems[1]; heldItems[1]=null; } shiftItems(); updateItemSlots(); }
+        return;
+    }
+
+    if(item==="コイン"){
+        useCoinItem();
+        heldItems[0]=heldItems[1]; heldItems[1]=null; shiftItems(); updateItemSlots();
+        tb.innerText="🔙🪙 +2枚 🪙"; tb.style.color="#ffcc00"; return;
+    }
+
+    if(item==="ファイヤーフラワー"){
+        if(!isItemEnabled("ファイヤーフラワー")) { tb.innerText="🚫 ファイヤーフラワーは無効です"; tb.style.color="#ff3333"; return; }
+        if(fireFlowerAmmo<=0){ heldItems[0]=heldItems[1]; heldItems[1]=null; shiftItems(); updateItemSlots(); return; }
+        if(fireballCooldown>0) return;
+        soundFireball();
+        const fm=new THREE.MeshStandardMaterial({color:0xff4400, emissive:0xff2200, emissiveIntensity:0.8});
+        const f=new THREE.Mesh(new THREE.SphereGeometry(0.7,10,10), fm);
+        f.position.copy(carGroup.position); f.position.y+=0.4;
+        const dir=new THREE.Vector3(Math.sin(carGroup.rotation.y),0,Math.cos(carGroup.rotation.y)).normalize();
+        f.position.addScaledVector(dir,3.0); scene.add(f);
+        const trail=[]; for(let i=0;i<6;i++){ const tm=new THREE.Mesh(new THREE.SphereGeometry(0.2,5,5), new THREE.MeshBasicMaterial({color:0xff6600, transparent:true, opacity:0.3})); tm.position.copy(f.position); tm.visible=false; scene.add(tm); trail.push(tm); }
+        fireballs.push({ mesh:f, direction:dir, life:250, speed:10, bounces:0, maxBounces:4, trail:trail, trailCounter:0, isNpc:false, ownerNpc:null, gravity:0.025, vy:0.15, isPlayerOwned:true });
+        fireFlowerAmmo--; fireballCooldown=12;
+        if(fireFlowerAmmo<=0){ heldItems[0]=heldItems[1]; heldItems[1]=null; shiftItems(); tb.innerText="🔥 背面投げ！ 使い切った！"; tb.style.color="#ff6600"; }
+        else { tb.innerText=`🔥 背面投げ！ 残${fireFlowerAmmo}発`; tb.style.color="#ff6600"; }
+        updateItemSlots(); return;
+    }
+
+    if(item==="ボム兵"){
+        if(!isItemEnabled("ボム兵")) { tb.innerText="🚫 ボム兵は無効です"; tb.style.color="#ff3333"; return; }
+        if(!isChargingBomb){ isChargingBomb=true; bombChargeTime=0; document.getElementById("charge-bar").style.display="block"; document.getElementById("charge-fill").style.width="0%"; tb.innerText="💣 背面チャージ中..."; tb.style.color="#ff8800"; return; }
+        return;
+    }
+
+    if(item==="緑甲羅" || item==="赤甲羅"){
+        if(!isItemEnabled(item)) { tb.innerText=`🚫 ${item}は無効です`; tb.style.color="#ff3333"; return; }
+        if(isItemShielding){ isItemShielding=false; if(shieldShellMesh){ carGroup.remove(shieldShellMesh); shieldShellMesh=null; } }
+        const sc=(item==="緑甲羅")?0x33cc33:0xff3333;
+        const sm=new THREE.Mesh(new THREE.SphereGeometry(1.5,16,16), new THREE.MeshStandardMaterial({color:sc, roughness:0.3}));
+        sm.position.copy(carGroup.position); sm.position.y+=0.5;
+        const dir=new THREE.Vector3(Math.sin(carGroup.rotation.y),0,Math.cos(carGroup.rotation.y)).normalize();
+        sm.position.addScaledVector(dir,4.0); scene.add(sm);
+        if(item==="緑甲羅") shells.push({ mesh:sm, dir:dir, type:"green", life:300, velocityY:0, isPlayerOwned:true });
+        else { let target=npcs[Math.floor(Math.random()*npcs.length)]; shells.push({ mesh:sm, type:"red", targetNpc:target, life:400, velocityY:0, isPlayerOwned:true }); }
+        heldItems[0]=heldItems[1]; heldItems[1]=null; shiftItems(); updateItemSlots();
+        tb.innerText=`🔙 ${item}背面投げ！`; tb.style.color="#ffaa00"; return;
+    }
+
+    if(item==="青甲羅"){
+        if(!isItemEnabled("青甲羅")) { tb.innerText="🚫 青甲羅は無効です"; tb.style.color="#ff3333"; return; }
+        if(isItemShielding){ isItemShielding=false; if(shieldShellMesh){ carGroup.remove(shieldShellMesh); shieldShellMesh=null; } }
+        const sm=new THREE.Mesh(new THREE.SphereGeometry(1.5,16,16), new THREE.MeshStandardMaterial({color:0x0066ff, roughness:0.3}));
+        sm.position.copy(carGroup.position); sm.position.y+=0.5; scene.add(sm); soundBlueShell();
+        let target=getBlueShellTarget(); let tm=target===carGroup?carGroup:target;
+        shells.push({ mesh:sm, type:"blue", target:tm, phase:"ascend", height:0, targetY:20, speed:3.5, life:1500, velocityY:0, startPos:carGroup.position.clone(), exploded:false, fixedX:0, fixedZ:0, isPlayerOwned:true });
+        heldItems[0]=heldItems[1]; heldItems[1]=null; shiftItems(); updateItemSlots();
+        let tn=(target===carGroup)?"あなた":"1位のNPC";
+        tb.innerText=`🔙 青甲羅背面！ (${tn}狙い)`; tb.style.color="#0066ff"; return;
+    }
+
+    if(item==="カメック"){ useKamekItem(); return; }
+
+    if(item==="キノコ"){ 
+        if(!isItemEnabled("キノコ")) { tb.innerText="🚫 キノコは無効です"; tb.style.color="#ff3333"; return; }
+        itemMushroomTimer=120; soundBoost(); tb.innerText="🔙🍄 背面ダッシュ！"; tb.style.color="#ff5555"; heldItems[0]=heldItems[1]; heldItems[1]=null; shiftItems(); updateItemSlots(); return; 
+    }
+    if(item==="金キノコ"){ 
+        if(!isItemEnabled("金キノコ")) { tb.innerText="🚫 金キノコは無効です"; tb.style.color="#ff3333"; return; }
+        itemGoldenTimer=600; soundBoost(); tb.innerText="🔙🌟 背面パワフル！"; tb.style.color="#ffeb3b"; heldItems[0]=heldItems[1]; heldItems[1]=null; shiftItems(); updateItemSlots(); return; 
+    }
+    if(item==="デカキノコ"){ 
+        if(!isItemEnabled("デカキノコ")) { tb.innerText="🚫 デカキノコは無効です"; tb.style.color="#ff3333"; return; }
+        itemMegaTimer=300; soundBoost(); tb.innerText="🔙🌟 背面デカキノコ！"; tb.style.color="#ff8800"; heldItems[0]=heldItems[1]; heldItems[1]=null; shiftItems(); updateItemSlots(); return; 
+    }
+    if(item==="スター"){ 
+        if(!isItemEnabled("スター")) { tb.innerText="🚫 スターは無効です"; tb.style.color="#ff3333"; return; }
+        itemStarTimer=420; soundBoost(); tb.innerText="⭐ スター無敵！"; tb.style.color="#ffff00"; heldItems[0]=heldItems[1]; heldItems[1]=null; shiftItems(); updateItemSlots(); return; 
+    }
+    if(item==="サンダー"){ 
+        if(!isItemEnabled("サンダー")) { tb.innerText="🚫 サンダーは無効です"; tb.style.color="#ff3333"; return; }
+        soundHit(); tb.innerText="⚡ サンダー！ ⚡"; npcs.forEach(n=>{ if(n.isMega<=0 && n.isStar<=0){ dropNpcItems(n); n.isSquished=180; n.boostTimer=0; } }); heldItems[0]=heldItems[1]; heldItems[1]=null; shiftItems(); updateItemSlots(); return; 
+    }
+    heldItems[0]=heldItems[1]; heldItems[1]=null; shiftItems(); updateItemSlots();
+}
+
+function useItem() {
+    const tb=document.getElementById("turbo-ui");
+    let item=heldItems[0];
+    if(!item || (itemBulletTimer>0 && item!=="キラー")) return;
+    
+    // ルーレット中の早切り (スロット1) - Shift/J/クリック全て対応
+    if (isItemRoulette && rouletteSlot === 0) {
+        tryRouletteEarlyCut();
+        return;
+    }
+
+    if (item==="ボム兵" && isChargingBomb) {
+        tb.innerText = "💣 チャージ中です！ 離して投げてください";
+        tb.style.color = "#ff8800";
+        return;
+    }
+
+    if(item==="コインボックス"){
+        let gain=Math.min(5, gameCoinTarget-coins);
+        coins+=gain;
+        document.getElementById("coin-text").innerText = `🪙 コイン: ${coins}/${gameCoinTarget}`;
+        soundCoin();
+        tb.innerText=`📦🪙 コインボックス！ +${gain}枚！`;
+        tb.style.color="#ffd700";
+        for(let i=0;i<10;i++){
+            const a=Math.random()*Math.PI*2;
+            const d=2+Math.random()*5;
+            const p=new THREE.Vector3(carGroup.position.x+Math.cos(a)*d,0.5,carGroup.position.z+Math.sin(a)*d);
+            const c=createEmojiSprite("🪙");
+            c.position.copy(p);
+            c.scale.set(3,3,1);
+            scene.add(c);
+            scatteredCoins.push({ 
+                mesh:c, 
+                pos:p.clone(), 
+                velocity:new THREE.Vector3(Math.cos(a)*(0.5+Math.random()*1.0),0.3+Math.random()*0.5,Math.sin(a)*(0.5+Math.random()*1.0)),
+                timer:300,
+                active:true 
+            });
+        }
+        heldItems[0]=heldItems[1]; heldItems[1]=null; shiftItems(); updateItemSlots();
+        return;
+    }
+
+    if(item==="カメック"){ useKamekItem(); return; }
+
+    if(item==="バナナ"){
+        if(!isItemEnabled("バナナ")) { tb.innerText="🚫 バナナは無効です"; tb.style.color="#ff3333"; return; }
+        const pos=carGroup.position.clone(); pos.y+=0.3;
+        const dir=new THREE.Vector3(-Math.sin(carGroup.rotation.y),0,-Math.cos(carGroup.rotation.y)).normalize();
+        pos.addScaledVector(dir,2.0);
+        throwBanana(pos, dir);
+        tb.innerText="🍌 バナナを投げた！"; tb.style.color="#ffcc00";
+        heldItems[0]=heldItems[1]; heldItems[1]=null; shiftItems(); updateItemSlots(); return;
+    }
+
+    if(item==="羽"){
+        if(!isItemEnabled("羽")) { tb.innerText="🚫 羽は無効です"; tb.style.color="#ff3333"; return; }
+        if(carY<=0.5) jumpVelocity=0.55;
+        else jumpVelocity=Math.max(jumpVelocity+0.25,0.7);
+        featherJumpCount++; soundBoost();
+        tb.innerText=`🪶 羽！ ${featherJumpCount}回目`; tb.style.color="#88ddff";
+        itemFeatherTimer=60;
+        heldItems[0]=heldItems[1]; heldItems[1]=null; shiftItems(); updateItemSlots(); return;
+    }
+
+    if(item==="キノコ3"){
+        if(!isItemEnabled("キノコ")) { tb.innerText="🚫 キノコは無効です"; tb.style.color="#ff3333"; return; }
+        if(tripleMushroomCount===0) tripleMushroomCount=3;
+        if(tripleMushroomCount>0){ itemMushroomTimer=80; soundBoost(); tripleMushroomCount--; tb.innerText=`🍄 ダッシュ！ (残り${tripleMushroomCount}回)`; tb.style.color="#ffaa00"; if(tripleMushroomCount===0){ heldItems[0]=heldItems[1]; heldItems[1]=null; } shiftItems(); updateItemSlots(); }
+        return;
+    }
+
+    if(item==="コイン"){
+        useCoinItem();
+        heldItems[0]=heldItems[1]; heldItems[1]=null; shiftItems(); updateItemSlots();
+        tb.innerText="🪙 +2枚 🪙"; tb.style.color="#ffcc00"; return;
+    }
+
+    if(item==="ファイヤーフラワー"){
+        if(!isItemEnabled("ファイヤーフラワー")) { tb.innerText="🚫 ファイヤーフラワーは無効です"; tb.style.color="#ff3333"; return; }
+        if(fireFlowerAmmo<=0){ heldItems[0]=heldItems[1]; heldItems[1]=null; shiftItems(); updateItemSlots(); return; }
+        if(fireballCooldown>0) return;
+        soundFireball();
+        const fm=new THREE.MeshStandardMaterial({color:0xff4400, emissive:0xff2200, emissiveIntensity:0.8});
+        const f=new THREE.Mesh(new THREE.SphereGeometry(0.7,10,10), fm);
+        f.position.copy(carGroup.position); f.position.y+=0.4;
+        const dir=new THREE.Vector3(-Math.sin(carGroup.rotation.y),0,-Math.cos(carGroup.rotation.y)).normalize();
+        f.position.addScaledVector(dir,3.0); scene.add(f);
+        const trail=[]; for(let i=0;i<6;i++){ const tm=new THREE.Mesh(new THREE.SphereGeometry(0.2,5,5), new THREE.MeshBasicMaterial({color:0xff6600, transparent:true, opacity:0.3})); tm.position.copy(f.position); tm.visible=false; scene.add(tm); trail.push(tm); }
+        fireballs.push({ mesh:f, direction:dir, life:250, speed:10, bounces:0, maxBounces:4, trail:trail, trailCounter:0, isNpc:false, ownerNpc:null, gravity:0.025, vy:0.15, isPlayerOwned:true });
+        fireFlowerAmmo--; fireballCooldown=12;
+        if(fireFlowerAmmo<=0){ heldItems[0]=heldItems[1]; heldItems[1]=null; shiftItems(); tb.innerText="🔥 使い切った！"; tb.style.color="#ff6600"; }
+        else { tb.innerText=`🔥 残${fireFlowerAmmo}発`; tb.style.color="#ff6600"; }
+        updateItemSlots(); return;
+    }
+
+    if(item==="ボム兵"){
+        if(!isItemEnabled("ボム兵")) { tb.innerText="🚫 ボム兵は無効です"; tb.style.color="#ff3333"; return; }
+        if(!isChargingBomb){ isChargingBomb=true; bombChargeTime=0; document.getElementById("charge-bar").style.display="block"; document.getElementById("charge-fill").style.width="0%"; tb.innerText="💣 チャージ中..."; tb.style.color="#ff8800"; return; }
+        return;
+    }
+
+    if((item==="緑甲羅"||item==="赤甲羅") && !isItemShielding){
+        if(!isItemEnabled(item)) { tb.innerText=`🚫 ${item}は無効です`; tb.style.color="#ff3333"; return; }
+        isItemShielding=true;
+        const sc=(item==="緑甲羅")?0x33cc33:0xff3333;
+        shieldShellMesh=new THREE.Mesh(new THREE.SphereGeometry(1.2,16,16), new THREE.MeshStandardMaterial({color:sc, roughness:0.3}));
+        shieldShellMesh.position.set(0,0.5,2.5); carGroup.add(shieldShellMesh);
+        tb.innerText=`🛡️ ${item}ガード中！`; tb.style.color="#33ffff"; updateItemSlots(); return;
+    }
+
+    if(item==="キノコ"){ 
+        if(!isItemEnabled("キノコ")) { tb.innerText="🚫 キノコは無効です"; tb.style.color="#ff3333"; return; }
+        itemMushroomTimer=120; soundBoost(); tb.innerText="🍄 ダッシュ！！"; tb.style.color="#ff5555"; heldItems[0]=heldItems[1]; heldItems[1]=null; shiftItems(); updateItemSlots(); return; 
+    }
+    if(item==="金キノコ"){ 
+        if(!isItemEnabled("金キノコ")) { tb.innerText="🚫 金キノコは無効です"; tb.style.color="#ff3333"; return; }
+        itemGoldenTimer=600; soundBoost(); tb.innerText="🌟 パワフル！"; tb.style.color="#ffeb3b"; heldItems[0]=heldItems[1]; heldItems[1]=null; shiftItems(); updateItemSlots(); return; 
+    }
+    if(item==="デカキノコ"){ 
+        if(!isItemEnabled("デカキノコ")) { tb.innerText="🚫 デカキノコは無効です"; tb.style.color="#ff3333"; return; }
+        itemMegaTimer=300; soundBoost(); tb.innerText="🌟 デカキノコ！"; tb.style.color="#ff8800"; heldItems[0]=heldItems[1]; heldItems[1]=null; shiftItems(); updateItemSlots(); return; 
+    }
+    if(item==="スター"){ 
+        if(!isItemEnabled("スター")) { tb.innerText="🚫 スターは無効です"; tb.style.color="#ff3333"; return; }
+        itemStarTimer=420; soundBoost(); tb.innerText="⭐ スター無敵！"; tb.style.color="#ffff00"; heldItems[0]=heldItems[1]; heldItems[1]=null; shiftItems(); updateItemSlots(); return; 
+    }
+    if(item==="緑甲羅"){ 
+        if(!isItemEnabled("緑甲羅")) { tb.innerText="🚫 緑甲羅は無効です"; tb.style.color="#ff3333"; return; }
+        if(shieldShellMesh){ carGroup.remove(shieldShellMesh); shieldShellMesh=null; } isItemShielding=false; const sm=new THREE.Mesh(new THREE.SphereGeometry(1.5,16,16), new THREE.MeshStandardMaterial({color:0x33cc33, roughness:0.3})); sm.position.copy(carGroup.position); sm.position.y+=0.5; const dir=new THREE.Vector3(-Math.sin(carGroup.rotation.y),0,-Math.cos(carGroup.rotation.y)).normalize(); sm.position.addScaledVector(dir,4.0); scene.add(sm); shells.push({ mesh:sm, dir:dir, type:"green", life:300, velocityY:0, isPlayerOwned:true }); heldItems[0]=heldItems[1]; heldItems[1]=null; shiftItems(); updateItemSlots(); return; 
+    }
+    if(item==="赤甲羅"){ 
+        if(!isItemEnabled("赤甲羅")) { tb.innerText="🚫 赤甲羅は無効です"; tb.style.color="#ff3333"; return; }
+        if(shieldShellMesh){ carGroup.remove(shieldShellMesh); shieldShellMesh=null; } isItemShielding=false; const sm=new THREE.Mesh(new THREE.SphereGeometry(1.5,16,16), new THREE.MeshStandardMaterial({color:0xff3333, roughness:0.3})); sm.position.copy(carGroup.position); sm.position.y+=0.5; const dir=new THREE.Vector3(-Math.sin(carGroup.rotation.y),0,-Math.cos(carGroup.rotation.y)).normalize(); sm.position.addScaledVector(dir,4.0); scene.add(sm); let target=npcs[Math.floor(Math.random()*npcs.length)]; shells.push({ mesh:sm, type:"red", targetNpc:target, life:400, velocityY:0, isPlayerOwned:true }); heldItems[0]=heldItems[1]; heldItems[1]=null; shiftItems(); updateItemSlots(); return; 
+    }
+    if(item==="青甲羅"){ 
+        if(!isItemEnabled("青甲羅")) { tb.innerText="🚫 青甲羅は無効です"; tb.style.color="#ff3333"; return; }
+        if(shieldShellMesh){ carGroup.remove(shieldShellMesh); shieldShellMesh=null; } isItemShielding=false; const sm=new THREE.Mesh(new THREE.SphereGeometry(1.5,16,16), new THREE.MeshStandardMaterial({color:0x0066ff, roughness:0.3})); sm.position.copy(carGroup.position); sm.position.y+=0.5; scene.add(sm); soundBlueShell(); let target=getBlueShellTarget(); let tm=target===carGroup?carGroup:target; shells.push({ mesh:sm, type:"blue", target:tm, phase:"ascend", height:0, targetY:20, speed:3.5, life:1500, velocityY:0, startPos:carGroup.position.clone(), exploded:false, fixedX:0, fixedZ:0, isPlayerOwned:true }); let tn=(target===carGroup)?"あなた":"1位のNPC"; tb.innerText=`💙 青甲羅発射！ (${tn}狙い)`; tb.style.color="#0066ff"; heldItems[0]=heldItems[1]; heldItems[1]=null; shiftItems(); updateItemSlots(); return; 
+    }
+    if(item==="サンダー"){ 
+        if(!isItemEnabled("サンダー")) { tb.innerText="🚫 サンダーは無効です"; tb.style.color="#ff3333"; return; }
+        soundHit(); tb.innerText="⚡ サンダー！ ⚡"; npcs.forEach(n=>{ if(n.isMega<=0 && n.isStar<=0){ dropNpcItems(n); n.isSquished=180; n.boostTimer=0; } }); heldItems[0]=heldItems[1]; heldItems[1]=null; shiftItems(); updateItemSlots(); return; 
+    }
+
+    heldItems[0]=heldItems[1]; heldItems[1]=null; shiftItems(); updateItemSlots();
+}
+
+function getBlueShellTarget() {
+    if(getPlayerRank()===1) return carGroup;
+    let best=null, bestProg=-Infinity;
+    for(let n of npcs){ let p=n.lap+n.progress; if(p>bestProg){ bestProg=p; best=n; } }
+    return best?best.mesh:carGroup;
+}
+
+// --- イベント (キーボード) ---
+window.addEventListener('keydown', (e)=>{
+    let k=e.key.toLowerCase(); if(k==="shift") k="shift";
+    if(k==="q" && !keys.q){
+        keys.q=true;
+        if (raceState === 2) {
+            document.getElementById("turbo-ui").innerText = "🔒 レース中は重さを変更できません！";
+            document.getElementById("turbo-ui").style.color = "#ff4444";
+            document.getElementById("race-lock-msg").style.display = "block";
+            setTimeout(() => {
+                document.getElementById("race-lock-msg").style.display = "none";
+            }, 1500);
+            return;
+        }
+        weightIndex=(weightIndex+1)%weightKeys.length;
+        playerWeight=weightKeys[weightIndex];
+        updatePlayerColor();
+        document.getElementById("turbo-ui").innerText=`⚖️ 重さを「${playerWeight}」に変更！`;
+        document.getElementById("turbo-ui").style.color="#ffaa00";
+        return;
+    }
+    if(k==="c" && !keys.c){
+        keys.c=true;
+        return;
+    }
+    if(e.key===" " && !keys[" "]){
+        keys[" "]=true;
+        if(itemBulletTimer>0 || isSquishedTimer>0) return;
+        const d1=Math.sqrt((carGroup.position.x-p1g.position.x)**2+(carGroup.position.z-p1g.position.z)**2);
+        const d2=Math.sqrt((carGroup.position.x-p2g.position.x)**2+(carGroup.position.z-p2g.position.z)**2);
+        if((d1<24||d2<24) && poleSpinTimer<=0 && Math.abs(speed)>0.3){ poleSpinTimer=45; jumpChargeTime=0; jumpVelocity=0.85; soundBoost(); return; }
+        if(isWallRiding){ isWallRiding=false; jumpVelocity=0.5; wallKickVelocityX=-wallRideSide*1.3; wallKickIgnoreTimer=20; hasJumpActioned=true; wallKickCount++; soundBoost(); document.getElementById("turbo-ui").innerText=`🧱💥 壁キック！ (${wallKickCount}回) 💥🧱`; document.getElementById("turbo-ui").style.color="#ff33ff"; return; }
+        if(isJumping && jumpActionTimer<=0 && poleSpinTimer<=0){ performJumpAction(); return; }
+        if(!isJumping && canChargeJump){}
+    }
+    if((k==="shift"||k==="j") && !keys[k]){ 
+        keys[k]=true; 
+        // ルーレット中ならShift/Jで早切り
+        if (isItemRoulette && rouletteSlot === 0) {
+            tryRouletteEarlyCut();
+        } else if (heldItems[0]) {
+            useItem(); 
+        }
+    }
+    if(k==="z"){ keys.z=true; if(heldItems[0]) useItemBackward(); }
+    if(k==="x"){ keys.x=true; lookBack=true; }
+    if(k==="p"){ if(!keys.p){ keys.p=true; showDebugStats=!showDebugStats; const el=document.getElementById("debug-stats"); if(el){ if(showDebugStats){ el.style.display="block"; el.textContent="FPS: -- | 最寄NPC: --"; } else el.style.display="none"; } } }
+    if(k in keys) keys[k]=true;
+});
+
+window.addEventListener('keyup', (e)=>{
+    let k=e.key.toLowerCase(); if(k==="shift") k="shift";
+    if(k==="q") keys.q=false;
+    if(k==="c") keys.c=false;
+    if ((k === "shift" || k === "j") && isChargingBomb && heldItems[0] === "ボム兵") {
+        const tb=document.getElementById("turbo-ui");
+        const ratio=Math.min(bombChargeTime/bombChargeMax,1.0);
+        soundBomb();
+        const bm=new THREE.Mesh(new THREE.SphereGeometry(0.8,12,12), new THREE.MeshStandardMaterial({color:0x222222}));
+        bm.position.copy(carGroup.position); bm.position.y+=0.3;
+        const dir=new THREE.Vector3(-Math.sin(carGroup.rotation.y),0,-Math.cos(carGroup.rotation.y)).normalize();
+        bm.position.addScaledVector(dir,2.0); scene.add(bm);
+        const fuse=new THREE.Mesh(new THREE.SphereGeometry(0.2,6,6), new THREE.MeshBasicMaterial({color:0xff6600}));
+        fuse.position.set(0,0.8,0.5); bm.add(fuse);
+        const spd=2+ratio*4;
+        bombs.push({ mesh:bm, direction:dir, velocityY:0.4+ratio*0.8, life:60, isNpc:false, ownerNpc:null, exploded:false, speedMul:spd, isPlayerOwned:true });
+        heldItems[0]=heldItems[1]; heldItems[1]=null; shiftItems(); updateItemSlots();
+        const dist=5+ratio*35;
+        tb.innerText=`💣 投げた！ (飛距離${Math.round(dist)}m)`; tb.style.color="#ff8800";
+        document.getElementById("charge-bar").style.display="none";
+        isChargingBomb=false; bombChargeTime=0;
+    }
+    if (k === "z" && isChargingBomb && heldItems[0] === "ボム兵") {
+        const tb=document.getElementById("turbo-ui");
+        const ratio=Math.min(bombChargeTime/bombChargeMax,1.0);
+        soundBomb();
+        const bm=new THREE.Mesh(new THREE.SphereGeometry(0.8,12,12), new THREE.MeshStandardMaterial({color:0x222222}));
+        bm.position.copy(carGroup.position); bm.position.y+=0.3;
+        const dir=new THREE.Vector3(Math.sin(carGroup.rotation.y),0,Math.cos(carGroup.rotation.y)).normalize();
+        bm.position.addScaledVector(dir,2.0); scene.add(bm);
+        const fuse=new THREE.Mesh(new THREE.SphereGeometry(0.2,6,6), new THREE.MeshBasicMaterial({color:0xff6600}));
+        fuse.position.set(0,0.8,0.5); bm.add(fuse);
+        const spd=2+ratio*4;
+        bombs.push({ mesh:bm, direction:dir, velocityY:0.4+ratio*0.8, life:60, isNpc:false, ownerNpc:null, exploded:false, speedMul:spd, isPlayerOwned:true });
+        heldItems[0]=heldItems[1]; heldItems[1]=null; shiftItems(); updateItemSlots();
+        const dist=5+ratio*35;
+        tb.innerText=`🔙💣 背面投げ！ (飛距離${Math.round(dist)}m)`; tb.style.color="#ff8800";
+        document.getElementById("charge-bar").style.display="none";
+        isChargingBomb=false; bombChargeTime=0;
+    }
+    if(e.key===" "){
+        keys[" "]=false;
+        if(itemBulletTimer>0 || isSquishedTimer>0){ jumpChargeTime=0; return; }
+        if(!isJumping && canChargeJump && carY<=0.15){
+            let ratio=Math.min(jumpChargeTime/50,1.0);
+            jumpVelocity=0.16+0.22*ratio;
+            if(ratio>=0.85){ pendingChargeTurbo=40; pendingChargeSpeed=2.3; pendingChargeMsg="🌈 フルチャージ着地！！！ 🌈"; pendingChargeColor="#ff66ff"; }
+            else if(ratio>=0.4){ pendingChargeTurbo=25; pendingChargeSpeed=2.1; pendingChargeMsg="💜 チャージ着地！ 💜"; pendingChargeColor="#9933ff"; }
+            else { pendingChargeTurbo=15; pendingChargeSpeed=1.9; pendingChargeMsg="💙 ジャンプ着地！ 💙"; pendingChargeColor="#3399ff"; }
+            hasJumpActioned=true; soundBoost();
+            jumpActionTimer=Math.floor(20+ratio*25);
+            jumpRotX=-(0.15+ratio*0.25);
+            jumpRotZ=(Math.random()-0.5)*0.1*ratio;
+            canChargeJump=false;
+        }
+        jumpChargeTime=0;
+    }
+    if(k==="x"){ keys.x=false; lookBack=false; }
+    if(k==="z") keys.z=false;
+    if(k==="p") keys.p=false;
+    if(k in keys) keys[k]=false;
+});
+
+window.addEventListener('mousedown', ()=>{ 
+    initAudio(); 
+    // ルーレット中ならクリックで早切り
+    if (isItemRoulette && rouletteSlot === 0) {
+        tryRouletteEarlyCut();
+    } else if (heldItems[0]) {
+        useItem(); 
+    }
+    isMouseDown=true; 
+});
+
+window.addEventListener('mouseup', ()=>{
+    isMouseDown=false;
+    if(isChargingBomb && heldItems[0]==="ボム兵"){
+        const tb=document.getElementById("turbo-ui");
+        const ratio=Math.min(bombChargeTime/bombChargeMax,1.0);
+        soundBomb();
+        const bm=new THREE.Mesh(new THREE.SphereGeometry(0.8,12,12), new THREE.MeshStandardMaterial({color:0x222222}));
+        bm.position.copy(carGroup.position); bm.position.y+=0.3;
+        const dir=new THREE.Vector3(-Math.sin(carGroup.rotation.y),0,-Math.cos(carGroup.rotation.y)).normalize();
+        bm.position.addScaledVector(dir,2.0); scene.add(bm);
+        const fuse=new THREE.Mesh(new THREE.SphereGeometry(0.2,6,6), new THREE.MeshBasicMaterial({color:0xff6600}));
+        fuse.position.set(0,0.8,0.5); bm.add(fuse);
+        const spd=2+ratio*4;
+        bombs.push({ mesh:bm, direction:dir, velocityY:0.4+ratio*0.8, life:60, isNpc:false, ownerNpc:null, exploded:false, speedMul:spd, isPlayerOwned:true });
+        heldItems[0]=heldItems[1]; heldItems[1]=null; shiftItems(); updateItemSlots();
+        const dist=5+ratio*35;
+        tb.innerText=`💣 投げた！ (飛距離${Math.round(dist)}m)`; tb.style.color="#ff8800";
+        document.getElementById("charge-bar").style.display="none";
+        isChargingBomb=false; bombChargeTime=0;
+    }
+});
+
+window.addEventListener('touchstart', (e)=>{ 
+    initAudio(); 
+    if (isItemRoulette && rouletteSlot === 0) {
+        tryRouletteEarlyCut();
+    } else if (heldItems[0]) {
+        useItem(); 
+    }
+    isMouseDown=true; 
+    e.preventDefault(); 
+}, {passive:false});
+
+window.addEventListener('touchend', (e)=>{
+    isMouseDown=false;
+    if(isChargingBomb && heldItems[0]==="ボム兵"){
+        const tb=document.getElementById("turbo-ui");
+        const ratio=Math.min(bombChargeTime/bombChargeMax,1.0);
+        soundBomb();
+        const bm=new THREE.Mesh(new THREE.SphereGeometry(0.8,12,12), new THREE.MeshStandardMaterial({color:0x222222}));
+        bm.position.copy(carGroup.position); bm.position.y+=0.3;
+        const dir=new THREE.Vector3(-Math.sin(carGroup.rotation.y),0,-Math.cos(carGroup.rotation.y)).normalize();
+        bm.position.addScaledVector(dir,2.0); scene.add(bm);
+        const fuse=new THREE.Mesh(new THREE.SphereGeometry(0.2,6,6), new THREE.MeshBasicMaterial({color:0xff6600}));
+        fuse.position.set(0,0.8,0.5); bm.add(fuse);
+        const spd=2+ratio*4;
+        bombs.push({ mesh:bm, direction:dir, velocityY:0.4+ratio*0.8, life:60, isNpc:false, ownerNpc:null, exploded:false, speedMul:spd, isPlayerOwned:true });
+        heldItems[0]=heldItems[1]; heldItems[1]=null; shiftItems(); updateItemSlots();
+        const dist=5+ratio*35;
+        tb.innerText=`💣 投げた！ (飛距離${Math.round(dist)}m)`; tb.style.color="#ff8800";
+        document.getElementById("charge-bar").style.display="none";
+        isChargingBomb=false; bombChargeTime=0;
+    }
+    e.preventDefault();
+}, {passive:false});
+
+function updateBombCharge() {
+    if(isChargingBomb && (keys.shift || keys.z || isMouseDown)){
+        bombChargeTime=Math.min(bombChargeTime+1, bombChargeMax);
+        const ratio=bombChargeTime/bombChargeMax;
+        document.getElementById("charge-fill").style.width=(ratio*100)+"%";
+        const tb=document.getElementById("turbo-ui");
+        let dir="前方";
+        if(keys.z) dir="背面";
+        else if(isMouseDown) dir="クリック";
+        tb.innerText=`💣 ${dir}チャージ中... ${Math.round(ratio*100)}%`;
+        tb.style.color="#ff8800";
+    }
+}
+
+function useNpcItem(npc) {
+    if(!npc.heldItem) return;
+    const item=npc.heldItem; npc.heldItem=null;
+    npc.lastUsedItem = item;
+    
+    // 無効なアイテムはスキップ
+    if (!isItemEnabled(item)) return;
+    
+    const tb = document.getElementById("turbo-ui");
+    const itemEmoji = getEmojiForItem(item);
+    
+    if(item==="キノコ3"){ npc.boostTimer=100; tb.innerText=`🤖 NPCが${itemEmoji}${item}を使用！`; tb.style.color="#ffaa00"; setTimeout(()=>{if(tb.innerText.includes("NPC")) tb.innerText="";}, 1200); return; }
+    if(item==="羽"){ npc.boostTimer=60; npc.mesh.position.y=1.5; tb.innerText=`🤖 NPCが${itemEmoji}${item}を使用！`; tb.style.color="#88ddff"; setTimeout(()=>{if(tb.innerText.includes("NPC")) tb.innerText="";}, 1200); return; }
+    if(item==="カメック"){
+        for(let i=0;i<3;i++){
+            let rni=Math.floor(Math.random()*NODE_COUNT);
+            let r1=npcPathNodes[rni%NODE_COUNT], r2=npcPathNodes[(rni+1)%NODE_COUNT];
+            let t=Math.random();
+            let posX=r1.x+(r2.x-r1.x)*t+(Math.random()-0.5)*40;
+            let posZ=r1.z+(r2.z-r1.z)*t+(Math.random()-0.5)*40;
+            let pos=new THREE.Vector3(Math.max(-370,Math.min(370,posX)),0,Math.max(-460,Math.min(460,posZ)));
+            if (isItemEnabled("バナナ")) {
+                const b=createBananaMesh(); b.position.copy(pos); b.position.y+=0.3; scene.add(b);
+                kamekTraps.push({ mesh:b, type:'banana', pos:pos.clone(), timer:600, active:true, isPlayerOwned:false });
+            }
+        }
+        tb.innerText=`🤖 NPCが${itemEmoji}${item}を使用！`; tb.style.color="#9944cc"; setTimeout(()=>{if(tb.innerText.includes("NPC")) tb.innerText="";}, 1200);
+        showShellWarning("🧙 カメックが暴れている！","#9944cc"); return;
+    }
+    if(item==="コインボックス"){
+        let gain=Math.min(3, gameCoinTarget-coins);
+        coins+=gain;
+        document.getElementById("coin-text").innerText = `🪙 コイン: ${coins}/${gameCoinTarget}`;
+        tb.innerText=`🤖 NPCが${itemEmoji}${item}を使用！ +${gain}枚`; tb.style.color="#ffd700"; setTimeout(()=>{if(tb.innerText.includes("NPC")) tb.innerText="";}, 1200);
+        showShellWarning(`📦🪙 NPCがコインボックス！ +${gain}枚`, "#ffd700");
+        return;
+    }
+    if(item==="バナナ"){
+        const pos=npc.mesh.position.clone(); pos.y+=0.3;
+        const dir=new THREE.Vector3(-Math.sin(npc.mesh.rotation.y),0,-Math.cos(npc.mesh.rotation.y)).normalize();
+        pos.addScaledVector(dir,2.0);
+        const b=createBananaMesh(); b.position.copy(pos); b.position.y+=0.2; scene.add(b);
+        kamekTraps.push({ mesh:b, type:'banana', pos:pos.clone(), timer:600, active:true, isPlayerOwned:false });
+        tb.innerText=`🤖 NPCが${itemEmoji}${item}を投げた！`; tb.style.color="#ffcc00"; setTimeout(()=>{if(tb.innerText.includes("NPC")) tb.innerText="";}, 1200);
+        showShellWarning("🍌 バナナが飛んでくる！","#ffcc00"); return;
+    }
+    if(item==="緑甲羅"){
+        const sm=new THREE.Mesh(new THREE.SphereGeometry(1.5,8,8), new THREE.MeshStandardMaterial({color:0x33cc33}));
+        sm.position.copy(npc.mesh.position); sm.position.y+=0.5;
+        const dir=new THREE.Vector3().subVectors(carGroup.position, npc.mesh.position).normalize();
+        const off=(Math.random()-0.5)*0.8; const rot=new THREE.Matrix4().makeRotationY(off); dir.applyMatrix4(rot);
+        sm.position.addScaledVector(dir,4.0); scene.add(sm);
+        shells.push({ mesh:sm, dir:dir, type:"green", life:250, velocityY:0, speedMul:2.8+Math.random()*0.5, isPlayerOwned:false });
+        tb.innerText=`🤖 NPCが${itemEmoji}${item}を発射！`; tb.style.color="#33cc33"; setTimeout(()=>{if(tb.innerText.includes("NPC")) tb.innerText="";}, 1200);
+        showShellWarning("🟢 緑甲羅が飛んでくる！避けて！","#33cc33"); return;
+    }
+    if(item==="ファイヤーフラワー"){
+        for(let i=0;i<2;i++){ setTimeout(()=>{
+            const fm=new THREE.MeshStandardMaterial({color:0xff4400, emissive:0xff2200, emissiveIntensity:0.8});
+            const f=new THREE.Mesh(new THREE.SphereGeometry(0.7,10,10), fm);
+            f.position.copy(npc.mesh.position); f.position.y+=0.4;
+            const dir=new THREE.Vector3().subVectors(carGroup.position, npc.mesh.position).normalize();
+            const off=(Math.random()-0.5)*1.2; const rot=new THREE.Matrix4().makeRotationY(off); dir.applyMatrix4(rot);
+            f.position.addScaledVector(dir,3.0); scene.add(f);
+            fireballs.push({ mesh:f, direction:dir, life:200, speed:8, bounces:0, maxBounces:2, trail:[], trailCounter:0, isNpc:true, ownerNpc:npc, gravity:0.03, vy:0.1+Math.random()*0.1, isPlayerOwned:false });
+            soundFireball();
+        }, i*100); }
+        tb.innerText=`🤖 NPCが${itemEmoji}${item}を使用！`; tb.style.color="#ff6600"; setTimeout(()=>{if(tb.innerText.includes("NPC")) tb.innerText="";}, 1200);
+        showShellWarning("🔥 火の玉が飛んでくる！","#ff6600"); return;
+    }
+    if(item==="ボム兵"){
+        soundBomb();
+        const bm=new THREE.Mesh(new THREE.SphereGeometry(0.8,12,12), new THREE.MeshStandardMaterial({color:0x222222}));
+        bm.position.copy(npc.mesh.position); bm.position.y+=0.3;
+        const dir=new THREE.Vector3().subVectors(carGroup.position, npc.mesh.position).normalize();
+        bm.position.addScaledVector(dir,2.0); scene.add(bm);
+        bombs.push({ mesh:bm, direction:dir, velocityY:0.5, life:55, isNpc:true, ownerNpc:npc, exploded:false, speedMul:2.5, isPlayerOwned:false });
+        tb.innerText=`🤖 NPCが${itemEmoji}${item}を投げた！`; tb.style.color="#ff8800"; setTimeout(()=>{if(tb.innerText.includes("NPC")) tb.innerText="";}, 1200);
+        showShellWarning("💣 ボム兵が飛んでくる！","#ff8800"); return;
+    }
+    if(item==="キノコ"||item==="金キノコ"||item==="デカキノコ"||item==="スター"){ 
+        npc.boostTimer=100; 
+        if(item==="デカキノコ") npc.isMega=200; 
+        if(item==="スター") npc.isStar=200;
+        tb.innerText=`🤖 NPCが${itemEmoji}${item}を使用！`; tb.style.color="#ffaa00"; setTimeout(()=>{if(tb.innerText.includes("NPC")) tb.innerText="";}, 1200);
+    }
+    else if(item==="赤甲羅"){
+        const sm=new THREE.Mesh(new THREE.SphereGeometry(1.5,8,8), new THREE.MeshStandardMaterial({color:0xff3333}));
+        sm.position.copy(npc.mesh.position); sm.position.y+=0.5; scene.add(sm);
+        shells.push({ mesh:sm, type:"red_to_player", life:350, velocityY:0, isPlayerOwned:false });
+        tb.innerText=`🤖 NPCが${itemEmoji}${item}を発射！`; tb.style.color="#ff3333"; setTimeout(()=>{if(tb.innerText.includes("NPC")) tb.innerText="";}, 1200);
+        showShellWarning("🔴 赤甲羅が追ってくる！","#ff3333");
+    } else if(item==="青甲羅"){
+        const sm=new THREE.Mesh(new THREE.SphereGeometry(1.5,8,8), new THREE.MeshStandardMaterial({color:0x0066ff}));
+        sm.position.copy(npc.mesh.position); sm.position.y+=0.5; scene.add(sm); soundBlueShell();
+        let target=getBlueShellTarget(); let tm=target===carGroup?carGroup:target;
+        shells.push({ mesh:sm, type:"blue", target:tm, phase:"ascend", height:0, targetY:20, speed:3.5, life:1500, velocityY:0, startPos:npc.mesh.position.clone(), exploded:false, fixedX:0, fixedZ:0, isPlayerOwned:false });
+        let tn=(target===carGroup)?"あなた":"1位のNPC";
+        tb.innerText=`🤖 NPCが${itemEmoji}${item}を発射！ (${tn}狙い)`; tb.style.color="#0066ff"; setTimeout(()=>{if(tb.innerText.includes("NPC")) tb.innerText="";}, 1500);
+        showShellWarning(`💙 青甲羅発射！ (${tn}狙い)`,"#0066ff");
+    } else if(item==="サンダー"){
+        if(itemMegaTimer<=0 && itemStarTimer<=0 && playerHitInvincibleTimer<=0){
+            isSquishedTimer=120; speed=0; turboTimer=0; isDrifting=false; driftCharge=0; turboState=0; itemMushroomTimer=0; itemGoldenTimer=0; soundHit();
+            dropPlayerItems(); dropCoins(); playerHitInvincibleTimer=180;
+            tb.innerText="⚡ サンダーを喰らった！！"; tb.style.color="#bb33ff";
+            showHitPopup("⚡ サンダー被弾！", "NPCが使用！", "#bb33ff");
+        } else {
+            tb.innerText="🛡️ サンダー無効化！"; tb.style.color="#ffff00";
+        }
+        npcs.forEach(o=>{ if(o!==npc && o.isMega<=0 && o.isStar<=0){ dropNpcItems(o); o.isSquished=120; o.boostTimer=0; } });
+    }
+}
+
+const carPos=carGroup.position;
+
+function createExplosion(pos){
+    const sg=new THREE.SphereGeometry(6,16,8);
+    const sm=new THREE.MeshBasicMaterial({color:0xffcc00, transparent:true, opacity:0.9, side:THREE.DoubleSide, depthWrite:false});
+    const dome=new THREE.Mesh(sg, sm); dome.position.set(pos.x,4,pos.z); dome.scale.y=0.6; scene.add(dome);
+    explosions.push({ mesh:dome, life:1.0, isDome:true });
+    const rm=new THREE.MeshBasicMaterial({color:0xffaa00, transparent:true, opacity:0.6, side:THREE.DoubleSide, depthWrite:false});
+    const ring=new THREE.Mesh(new THREE.RingGeometry(0.5,8,24), rm);
+    ring.position.set(pos.x,0.1,pos.z); ring.rotation.x=-Math.PI/2; scene.add(ring);
+    explosions.push({ mesh:ring, life:0.8, isDome:false });
+    const light=new THREE.PointLight(0xffaa00,10,40); light.position.set(pos.x,5,pos.z); scene.add(light);
+    setTimeout(()=>scene.remove(light),300);
+}
+
+// --- メインアニメーション ---
+function animate(time){
+    const tb=document.getElementById("turbo-ui");
+    const status=document.getElementById("status-text");
+    const rank=document.getElementById("rank-text");
+    const lap=document.getElementById("lap-text");
+    const cd=document.getElementById("countdown");
+    const warn=document.getElementById("warning-text");
+
+    frameCount++;
+    const now=performance.now();
+    if(now-lastFpsUpdate>=1000){ currentFps=Math.round(frameCount*1000/(now-lastFpsUpdate)); frameCount=0; lastFpsUpdate=now; }
+
+    if(showDebugStats){
+        let nd=Infinity, nn=null, np=null;
+        for(let i=0;i<npcs.length;i++){ const d=carGroup.position.distanceTo(npcs[i].mesh.position); if(d<nd){ nd=d; nn=npcs[i]; np=npcs[i].mesh.position.clone(); } }
+        let dt="";
+        if(nn && np){ const fwd=new THREE.Vector3(-Math.sin(carGroup.rotation.y),0,-Math.cos(carGroup.rotation.y)); const toN=new THREE.Vector3().subVectors(np, carGroup.position); toN.y=0; const dot=fwd.dot(toN.normalize()); if(dot>0.3) dt="前"; else if(dot<-0.3) dt="後ろ"; else dt="横"; }
+        const ndt=nd===Infinity?"---":nd.toFixed(1)+"m "+dt;
+        const el=document.getElementById("debug-stats");
+        if(el) el.textContent=`FPS: ${currentFps}  |  最寄NPC: ${ndt}`;
+    }
+
+    updateBombCharge();
+
+    // ★ プレイヤーカメックの更新（複数対応）
+    updatePlayerKameks();
+
+    if(gameMode==='timeattack' && raceState===2 && !isFinished){
+        if(!timeAttackRunning){ timeAttackRunning=true; timeAttackCurrentTime=0; }
+        timeAttackCurrentTime += 0.01666;
+        document.getElementById("time-display").innerHTML = `⏱️ ${formatTime(timeAttackCurrentTime)}`;
+    }
+
+    // 散らばったコイン処理
+    for(let i=scatteredCoins.length-1; i>=0; i--){
+        const sc=scatteredCoins[i];
+        if(!sc.active){ scene.remove(sc.mesh); scatteredCoins.splice(i,1); continue; }
+        sc.timer--;
+        sc.pos.x += sc.velocity.x * 0.03;
+        sc.pos.z += sc.velocity.z * 0.03;
+        sc.velocity.y -= 0.02;
+        sc.pos.y += sc.velocity.y;
+        if(sc.pos.y<0.2){ sc.pos.y=0.2; sc.velocity.y=-sc.velocity.y*0.3; if(Math.abs(sc.velocity.y)<0.02) sc.velocity.y=0; }
+        sc.mesh.position.copy(sc.pos);
+        sc.mesh.rotation.z += 0.03;
+        if(carPos.distanceTo(sc.pos)<3.0){
+            if(coins<gameCoinTarget){ coins++; document.getElementById("coin-text").innerText=`🪙 コイン: ${coins}/${gameCoinTarget}`; playTone(880,0.06,'sine',0.08); }
+            sc.active=false; continue;
+        }
+        for(let j=0;j<npcs.length;j++){
+            if(sc.pos.distanceTo(npcs[j].mesh.position)<3.0){ sc.active=false; break; }
+        }
+        if(sc.timer<=0) sc.active=false;
+    }
+
+    const prevJump=isJumping;
+    isJumping=(carY>0.15 || jumpVelocity>0.01);
+    if(!isJumping && prevJump){
+        if(jumpActionCountThisJump>0){
+            let bp=1.8; if(jumpActionCountThisJump>=5) bp=2.8; else if(jumpActionCountThisJump>=4) bp=2.5; else if(jumpActionCountThisJump>=3) bp=2.2; else if(jumpActionCountThisJump>=2) bp=2.0;
+            turboTimer=Math.max(turboTimer,15+jumpActionCountThisJump*5);
+            speed=Math.max(speed,bp); soundBoost();
+            tb.innerText=`💨 着地ブースト！ (${jumpActionCountThisJump}回) 💨`; tb.style.color="#00ff66";
+        }
+        jumpActionCountThisJump=0; canChargeJump=true;
+        document.getElementById("jump-count").innerHTML=`✨ ジャンプ: ${jumpActionCount}回 (今回${jumpActionCountThisJump}回)`;
+    }
+
+    if(warningTimer>0){ warningTimer--; warn.textContent=warningMessage; warn.style.color=warningColor; } else warn.textContent="";
+
+    gearGroup.rotation.z += 0.008; alertLight.intensity=Math.sin(Date.now()*0.01)*0.8+0.8;
+    if(playerHitInvincibleTimer>0) playerHitInvincibleTimer--;
+
+    let camOffX=isDrifting?-driftDir*5:0;
+    let relCam;
+    if(lookBack) relCam=new THREE.Vector3(0,7.0,-24.0);
+    else if(keys.s) relCam=new THREE.Vector3(camOffX,6.0,-15);
+    else relCam=new THREE.Vector3(camOffX,6.0,15);
+    const targetCam=relCam.clone().applyMatrix4(carGroup.matrixWorld);
+    currentCameraPos.lerp(targetCam, lookBack?0.2:0.08);
+    camera.position.copy(currentCameraPos);
+    camera.lookAt(new THREE.Vector3(carPos.x, carPos.y+1.2, carPos.z));
+
+    let inEntry=(carPos.x>-entryGeo.parameters.width/2 && carPos.x<entryGeo.parameters.width/2 && carPos.z>80 && carPos.z<140);
+
+    if(raceState===0){
+        rank.innerText="順位: 自由走行中"; lap.innerText="Lap: --";
+        let tt=inEntry?"【E】キーでレース開始！":"黄色のエリアへ向かおう";
+        if(tt!==lastCenterText){ cd.innerText=tt; lastCenterText=tt; centerUiTimer=5000; }
+        if(centerUiTimer>0){ centerUiTimer-=16.66; if(centerUiTimer<=0) cd.innerText=""; }
+        if(inEntry && keys.e){ keys.e=false; startRaceGridPlacement(); raceState=1; countdownTime=4000; rocketTimer=0; rocketFailed=false; lastCenterText=""; }
+    } else if(raceState===1){
+        countdownTime-=16.66; let sec=countdownTime/1000, secInt=Math.floor(sec);
+        if(sec>3){ cd.innerText="3"; if(lastSecondsInt!==3){ soundCount(); lastSecondsInt=3; } }
+        else if(sec>2){ cd.innerText="2"; if(lastSecondsInt!==2){ soundCount(); lastSecondsInt=2; } 
+            if(keys.w) rocketTimer += 16.66;
+        }
+        else if(sec>1){ cd.innerText="1"; if(lastSecondsInt!==1){ soundCount(); lastSecondsInt=1; } 
+            if(keys.w && rocketTimer > 400) rocketFailed = true;
+        }
+        else if(sec>0){ cd.innerText="GO!!"; raceState=2; soundGo();
+            if(rocketTimer > 300 && rocketTimer < 950 && !rocketFailed){ 
+                turboTimer=30; soundBoost(); soundRocket();
+                tb.innerText="🚀 ロケットスタート！ 🚀"; 
+                speed = 2.0;
+            } else if(rocketFailed){ 
+                speed=-0.2; turboTimer=-20; soundHit(); 
+                tb.innerText="💨 エンスト！ 💨"; 
+            } else {
+                tb.innerText="🏁 スタート！";
+            }
+        }
+    } else if(raceState===2){
+        if(countdownTime>-1000){ countdownTime-=16.66; if(countdownTime<=0) cd.innerText=""; }
+    } else if(raceState===3){
+        if(lastCenterText!=="🏁 FINISH!! 🏁"){
+            cd.innerText="🏁 FINISH!! 🏁"; lastCenterText="🏁 FINISH!! 🏁"; centerUiTimer=5000;
+            if(gameMode==='timeattack' && isFinished){
+                let totalTime=timeAttackCurrentTime;
+                if(!timeAttackBestTime || totalTime<parseFloat(timeAttackBestTime)){
+                    timeAttackBestTime=totalTime;
+                    localStorage.setItem('timeAttackBestTime', String(totalTime));
+                    document.getElementById("best-time-display").innerHTML=`🏆 ベスト更新！ ${formatTime(totalTime)}`;
+                }
+                tb.innerText=`⏱️ タイム: ${formatTime(totalTime)}`;
+                if(timeAttackBestTime) document.getElementById("best-time-display").innerHTML=`🏆 ベスト: ${formatTime(parseFloat(timeAttackBestTime))}`;
+            }
+            raceEndTimer = 180;
+            isReturningToHome = false;
+        }
+        if(centerUiTimer>0){ centerUiTimer-=16.66; if(centerUiTimer<=0) cd.innerText=""; }
+        if(raceEndTimer > 0){
+            raceEndTimer--;
+            if(raceEndTimer === 0 && !isReturningToHome){
+                isReturningToHome = true;
+                raceState = 0;
+                isFinished = false;
+                gameStarted = false;
+                if (bgmInterval) {
+                    clearInterval(bgmInterval);
+                    bgmInterval = null;
+                }
+                document.getElementById('home-screen').style.display = 'flex';
+                document.getElementById("turbo-ui").innerText = "";
+                kameks.forEach(k=>scene.remove(k.mesh)); kameks.length=0;
+                kamekTraps.forEach(t=>scene.remove(t.mesh)); kamekTraps.length=0;
+                playerKameks.forEach(k => {
+                    scene.remove(k.mesh);
+                    if (k.auraMesh) {
+                        scene.remove(k.auraMesh);
+                        scene.remove(k.sparkMesh1);
+                        scene.remove(k.sparkMesh2);
+                    }
+                });
+                playerKameks = [];
+                itemBoxes.forEach(b=>scene.remove(b.mesh)); itemBoxes.length=0;
+                coinsArray.forEach(c=>{ c.mesh.visible=true; c.collected=false; });
+                scatteredCoins.forEach(s=>scene.remove(s.mesh)); scatteredCoins.length=0;
+                carGroup.position.set(0,0,130);
+                cd.innerText = "";
+                lastCenterText = "";
+                rank.innerText = "順位: --";
+                lap.innerText = "Lap: --";
+                document.getElementById("coin-text").innerText = `🪙 コイン: 0/10`;
+                heldItems = [null, null];
+                updateItemSlots();
+            }
+        }
+    }
+
+    // --- 爆発エフェクト ---
+    for(let i=explosions.length-1; i>=0; i--){
+        const e=explosions[i]; e.life-=0.025;
+        const s=1+(1-e.life)*3;
+        if(e.isDome) e.mesh.scale.set(s,s*0.6,s);
+        else { e.mesh.scale.set(s,s,s); e.mesh.material.opacity=Math.max(0,e.life*0.9); }
+        if(e.life<=0){ scene.remove(e.mesh); explosions.splice(i,1); }
+    }
+
+    // --- ファイヤーフラワー ---
+    if(fireballCooldown>0) fireballCooldown--;
+    for(let i=fireballs.length-1; i>=0; i--){
+        const f=fireballs[i]; f.life--;
+        f.vy=(f.vy||0)-(f.gravity||0.025);
+        f.mesh.position.x += f.direction.x * f.speed;
+        f.mesh.position.z += f.direction.z * f.speed;
+        f.mesh.position.y += f.vy;
+        if(f.mesh.position.y<0.2){ f.mesh.position.y=0.2; f.vy=Math.abs(f.vy)*0.3; if(Math.abs(f.vy)<0.02) f.life=0; }
+        if(f.trail && f.trail.length>0){ f.trailCounter=(f.trailCounter+1)%3; if(f.trailCounter===0){ const t=f.trail.shift(); t.position.copy(f.mesh.position); t.visible=true; t.material.opacity=0.6; f.trail.push(t); } f.trail.forEach(t=>{ t.material.opacity*=0.94; if(t.material.opacity<0.01) t.visible=false; }); }
+        const bx=f.mesh.position.x, bz=f.mesh.position.z;
+        if((bx<-370||bx>370||bz<-470||bz>470) && f.bounces<f.maxBounces){ if(bx<-370||bx>370) f.direction.x*=-1; if(bz<-470||bz>470) f.direction.z*=-1; f.bounces++; f.mesh.position.x=Math.max(-369,Math.min(369,bx)); f.mesh.position.z=Math.max(-469,Math.min(469,bz)); }
+        let rm=false; if(f.life<=0) rm=true;
+        if(!rm){ for(let j=0;j<npcs.length;j++){ const n=npcs[j]; const d=f.mesh.position.distanceTo(n.mesh.position); if(d<3.5){ if(f.isNpc && f.ownerNpc===n) continue; if(n.isStar>0||n.isMega>0) continue; if(n.heldItem==="緑甲羅"||n.heldItem==="赤甲羅"){ if(n.heldItem){ spawnDroppedItem(n.heldItem, n.mesh.position); n.heldItem=null; } showShellWarning("🔥 ガード破壊！","#ff6600"); rm=true; break; } n.isSquished=150; n.boostTimer=0; const c=Math.floor(Math.random()*2)+1; for(let k=0;k<c;k++) spawnDroppedItem("コイン", n.mesh.position); soundHit(); tb.innerText="🔥 火の玉命中！"; tb.style.color="#ff6600"; if(f.isPlayerOwned) { showHitNotification("🔥 ファイヤーボールが命中！","#ff6600"); showHitPopup("🔥 ファイヤーボール命中！", "NPCにヒット！", "#ff6600"); } rm=true; break; } } }
+        if(!rm && f.isNpc){ const d=f.mesh.position.distanceTo(carGroup.position); if(d<3.5){ if(itemStarTimer>0||itemMegaTimer>0||itemBulletTimer>0){ tb.innerText="🛡️ 無効化！"; tb.style.color="#ffff00"; rm=true; } else { if(isItemShielding && shieldShellMesh){ carGroup.remove(shieldShellMesh); shieldShellMesh=null; isItemShielding=false; if(heldItems[0]) spawnDroppedItem(heldItems[0], carGroup.position); heldItems[0]=null; showShellWarning("🔥 ガード破壊！","#ff6600"); rm=true; } else if(playerHitInvincibleTimer<=0){ if(gameMode==='survival'){ playerHP--; document.getElementById("hp-text").innerHTML=`❤️ HP: ${playerHP}/${maxHP}`; if(playerHP<=0){ isFinished=true; raceState=3; tb.innerText="💀 脱落！"; tb.style.color="#ff0000"; rm=true; return; } } isSquishedTimer=150; speed=0; turboTimer=0; isDrifting=false; driftCharge=0; turboState=0; itemMushroomTimer=0; itemGoldenTimer=0; playerHitInvincibleTimer=180; dropCoins(); soundHit(); tb.innerText="🔥 火の玉被弾！"; tb.style.color="#ff4400"; showShellWarning("🔥 被弾！","#ff4400"); showHitPopup("🔥 火の玉被弾！", "NPCから！", "#ff4400"); rm=true; } } } }
+        if(rm){ const se=new THREE.Mesh(new THREE.SphereGeometry(1.5,12,12), new THREE.MeshBasicMaterial({color:0xff6600, transparent:true, opacity:0.8})); se.position.copy(f.mesh.position); se.position.y=0.3; scene.add(se); setTimeout(()=>scene.remove(se),200); scene.remove(f.mesh); if(f.trail) f.trail.forEach(t=>scene.remove(t)); fireballs.splice(i,1); }
+    }
+
+    // --- ボム兵 ---
+    for(let i=bombs.length-1; i>=0; i--){
+        const b=bombs[i]; b.life--;
+        const spd=b.speedMul||3.0;
+        b.mesh.position.x += b.direction.x * spd;
+        b.mesh.position.z += b.direction.z * spd;
+        b.velocityY -= 0.04;
+        b.mesh.position.y += b.velocityY;
+        if(b.mesh.position.y<0){ b.mesh.position.y=0; b.velocityY=0; }
+        if(b.life<=0 || b.mesh.position.y<=0){
+            if(!b.exploded){ b.exploded=true; const pos=b.mesh.position.clone(); createExplosion(pos); soundHit(); const radius=25; const d=pos.distanceTo(carGroup.position); if(d<radius){ if(itemStarTimer>0||itemMegaTimer>0||itemBulletTimer>0){ tb.innerText="🛡️ 無効化！"; tb.style.color="#ffff00"; } else if(isItemShielding && shieldShellMesh){ tb.innerText="🛡️ ガード！"; tb.style.color="#00ff88"; showShellWarning("🛡️ 爆発ガード！","#00ff88"); } else if(playerHitInvincibleTimer<=0){ if(gameMode==='survival'){ playerHP-=2; document.getElementById("hp-text").innerHTML=`❤️ HP: ${playerHP}/${maxHP}`; if(playerHP<=0){ isFinished=true; raceState=3; tb.innerText="💀 脱落！"; tb.style.color="#ff0000"; return; } } isSquishedTimer=120; speed=0; turboTimer=0; isDrifting=false; driftCharge=0; turboState=0; itemMushroomTimer=0; itemGoldenTimer=0; playerHitInvincibleTimer=180; dropCoins(); dropCoins(); tb.innerText="💥 爆発被弾！コイン-2"; tb.style.color="#ff8800"; showShellWarning("💥 爆発被弾！","#ff8800"); showHitPopup("💥 爆発被弾！", "ボム兵！", "#ff8800"); } } npcs.forEach(n=>{ if(pos.distanceTo(n.mesh.position)<radius && n.isMega<=0 && n.isStar<=0){ n.isSquished=180; n.boostTimer=0; const c=Math.floor(Math.random()*2)+1; for(let k=0;k<c;k++) spawnDroppedItem("コイン", n.mesh.position); } }); }
+            scene.remove(b.mesh); bombs.splice(i,1);
+        }
+        if(b.mesh.children.length>0){ const fuse=b.mesh.children[0]; if(fuse){ fuse.material.color.setHSL((Date.now()*0.02)%1,1,0.5); fuse.scale.set(1+Math.sin(Date.now()*0.1)*0.3, 1+Math.sin(Date.now()*0.1+1)*0.3, 1+Math.sin(Date.now()*0.1+2)*0.3); } }
+    }
+
+    // --- 甲羅処理 ---
+    for(let i=shells.length-1; i>=0; i--){
+        const s=shells[i]; s.life--;
+        if(s.type!=="blue"){ s.velocityY=(s.velocityY||0)-0.02; s.mesh.position.y+=s.velocityY; if(s.mesh.position.y<0){ s.mesh.position.y=0; s.velocityY=0; } }
+        if(s.type==="green"){ const spd=s.speedMul||3.5; s.mesh.position.addScaledVector(s.dir, spd); s.mesh.rotation.y+=0.1; }
+        else if(s.type==="red" && s.targetNpc){ const tp=s.targetNpc.mesh.position; const sd=new THREE.Vector3().subVectors(tp, s.mesh.position); sd.y=0; sd.normalize(); s.mesh.position.addScaledVector(sd,3.5); s.mesh.lookAt(tp.x,s.mesh.position.y,tp.z); }
+        else if(s.type==="red_to_player"){ const tp=carGroup.position; const sd=new THREE.Vector3().subVectors(tp, s.mesh.position); sd.y=0; sd.normalize(); s.mesh.position.addScaledVector(sd,3.5); s.mesh.lookAt(tp.x,s.mesh.position.y,tp.z); if(s.mesh.position.distanceTo(carGroup.position)<5.5){ if(isItemShielding){ isItemShielding=false; if(shieldShellMesh){ carGroup.remove(shieldShellMesh); shieldShellMesh=null; } heldItems[0]=heldItems[1]; heldItems[1]=null; shiftItems(); updateItemSlots(); soundHit(); tb.innerText="🛡️ ガード成功！"; tb.style.color="#00ff00"; showShellWarning("🛡️ 甲羅ガード！","#00ff88"); showHitPopup("🛡️ ガード成功！", "甲羅を防いだ！", "#00ff88"); } else if(itemMegaTimer<=0 && itemStarTimer<=0 && itemBulletTimer<=0){ if(playerHitInvincibleTimer>0){ tb.innerText="🛡️ 無敵！"; tb.style.color="#33ffff"; } else { if(gameMode==='survival'){ playerHP--; document.getElementById("hp-text").innerHTML=`❤️ HP: ${playerHP}/${maxHP}`; if(playerHP<=0){ isFinished=true; raceState=3; tb.innerText="💀 脱落！"; tb.style.color="#ff0000"; return; } } isSquishedTimer=90; speed=0; turboTimer=0; isDrifting=false; driftCharge=0; turboState=0; itemMushroomTimer=0; itemGoldenTimer=0; playerHitInvincibleTimer=180; soundHit(); dropCoins(); tb.innerText="💥 被弾！"; tb.style.color="#ff3333"; showShellWarning("🔴 被弾！","#ff3333"); showHitPopup("🔴 赤甲羅被弾！", "NPCから！", "#ff3333"); } } else { tb.innerText="🛡️ 無効化！"; tb.style.color="#ffff00"; } s.life=0; } }
+        else if(s.type==="blue"){
+            if(!s.target || s.exploded){ s.life=0; continue; }
+            let tp=s.target.position?s.target.position:s.target.mesh.position;
+            if(!tp){ s.life=0; continue; }
+            if(s.phase==="ascend"){
+                let dx=tp.x-s.mesh.position.x, dz=tp.z-s.mesh.position.z, dist=Math.sqrt(dx*dx+dz*dz);
+                if(dist>1.5){ let move=Math.min(dist, s.speed*0.8); s.mesh.position.x += (dx/dist)*move; s.mesh.position.z += (dz/dist)*move; }
+                s.height += 0.6; s.mesh.position.y=s.height;
+                if(s.height>=s.targetY){ s.phase="descend"; s.velocityY=0.5; s.fixedX=tp.x; s.fixedZ=tp.z; }
+            } else if(s.phase==="descend"){
+                if(s.target){ let tpos=s.target.position?s.target.position:s.target.mesh.position; if(tpos){ let dx=tpos.x-s.fixedX, dz=tpos.z-s.fixedZ, dist=Math.sqrt(dx*dx+dz*dz); let maxMove=s.speed*0.6; if(dist>0.1){ let move=Math.min(dist,maxMove); s.fixedX += (dx/dist)*move; s.fixedZ += (dz/dist)*move; } } }
+                s.mesh.position.x=s.fixedX; s.mesh.position.z=s.fixedZ;
+                s.velocityY -= 0.08; s.mesh.position.y += s.velocityY;
+                if(s.mesh.position.y<=0){
+                    s.mesh.position.y=0;
+                    createExplosion(s.mesh.position); soundHit();
+                    const radius=35;
+                    let d=s.mesh.position.distanceTo(carGroup.position);
+                    if(d<radius){
+                        let def=(itemMushroomTimer>0||itemStarTimer>0||itemMegaTimer>0);
+                        if(def){ tb.innerText="🛡️ 防御！"; tb.style.color="#00ff88"; }
+                        else if(playerHitInvincibleTimer>0){ tb.innerText="🛡️ 無敵！"; tb.style.color="#33ffff"; }
+                        else {
+                            if(gameMode==='survival'){ playerHP-=2; document.getElementById("hp-text").innerHTML=`❤️ HP: ${playerHP}/${maxHP}`; if(playerHP<=0){ isFinished=true; raceState=3; tb.innerText="💀 脱落！"; tb.style.color="#ff0000"; return; } }
+                            isSquishedTimer=90; speed=0; turboTimer=0; isDrifting=false; driftCharge=0; turboState=0; itemMushroomTimer=0; itemGoldenTimer=0; playerHitInvincibleTimer=180; dropCoins(); tb.innerText="💥💙 青甲羅爆発！"; tb.style.color="#ff0066"; showShellWarning("💙 青甲羅被弾！","#0066ff");
+                            showHitPopup("💙 青甲羅被弾！", "直撃！", "#0066ff");
+                        }
+                    }
+                    npcs.forEach(n=>{ if(s.mesh.position.distanceTo(n.mesh.position)<radius && n.isMega<=0 && n.isStar<=0){ n.isSquished=90; n.boostTimer=0; dropNpcItems(n); if(s.isPlayerOwned) { showHitNotification("💙 青甲羅が命中！","#0088ff"); showHitPopup("💙 青甲羅命中！", "NPCに直撃！", "#0088ff"); } } });
+                    scene.remove(s.mesh); shells.splice(i,1); continue;
+                }
+            }
+        }
+        let hit=false;
+        if(s.type!=="red_to_player" && s.type!=="blue"){
+            for(let j=0;j<npcs.length;j++){ const n=npcs[j]; if(s.mesh.position.distanceTo(n.mesh.position)<5.5){ if(n.isMega<=0 && n.isStar<=0){ n.isSquished=120; n.boostTimer=0; } hit=true; soundHit(); tb.innerText="🎯 甲羅命中！"; tb.style.color="#00ff00"; if(s.isPlayerOwned){ let nm=s.type==="green"?"🟢 緑甲羅":"🔴 赤甲羅"; showHitNotification(`${nm}が命中！`, s.type==="green"?"#00ff00":"#ff3333"); showHitPopup(`${nm}命中！`, "NPCにヒット！", s.type==="green"?"#00ff00":"#ff3333"); } break; } }
+        }
+        if(hit || s.life<=0 || s.mesh.position.length()>5000){ scene.remove(s.mesh); shells.splice(i,1); }
+    }
+
+    // --- ドロップアイテム回収 ---
+    for(let i=droppedItems.length-1; i>=0; i--){
+        const d=droppedItems[i]; d.timer--; d.mesh.position.y=2+Math.sin(Date.now()*0.007)*0.4;
+        const dist=Math.sqrt((carGroup.position.x-d.mesh.position.x)**2+(carGroup.position.z-d.mesh.position.z)**2);
+        if(dist<4.5){
+            if(d.type==="コイン"){ if(coins<gameCoinTarget) coins++; playTone(587,0.08,'sine',0.1); document.getElementById("coin-text").innerText=`🪙 コイン: ${coins}/${gameCoinTarget}`; scene.remove(d.mesh); droppedItems.splice(i,1); continue; }
+            if(!isItemRoulette){ soundItem(); if(!heldItems[0]) heldItems[0]=d.type; else if(!heldItems[1]) heldItems[1]=d.type; else spawnDroppedItem(d.type, carGroup.position); scene.remove(d.mesh); droppedItems.splice(i,1); shiftItems(); updateItemSlots(); continue; }
+        }
+        let picked=false;
+        for(let j=0;j<npcs.length;j++){ const nd=Math.sqrt((npcs[j].mesh.position.x-d.mesh.position.x)**2+(npcs[j].mesh.position.z-d.mesh.position.z)**2); if(!npcs[j].heldItem && nd<9 && d.type!=="コイン"){ npcs[j].heldItem=d.type; npcs[j].itemUseTimer=Math.floor(Math.random()*120)+60; scene.remove(d.mesh); droppedItems.splice(i,1); picked=true; break; } }
+        if(picked) continue;
+        if(d.timer<=0){ scene.remove(d.mesh); droppedItems.splice(i,1); }
+    }
+
+    // --- コイン回収 ---
+    coinsArray.forEach(c=>{
+        if(!c.collected){ c.mesh.rotation.z=Math.sin(Date.now()*0.005)*0.15; const dist=Math.sqrt((carGroup.position.x-c.mesh.position.x)**2+(carGroup.position.z-c.mesh.position.z)**2); if(dist<5.0 && carY<=3.0){ c.collected=true; c.mesh.visible=false; if(coins<gameCoinTarget) coins++; playTone(587,0.08,'sine',0.1); setTimeout(()=>playTone(880,0.12,'sine',0.1),40); document.getElementById("coin-text").innerText=`🪙 コイン: ${coins}/${gameCoinTarget}`; } }
+    });
+
+    // --- タイマー ---
+    if(itemGoldenTimer>0){ itemGoldenTimer--; if(itemGoldenTimer%10===0) updateItemSlots(); if(itemGoldenTimer<=0){ updateItemSlots(); tb.innerText=""; } }
+    if(itemStarTimer>0){ itemStarTimer--; if(itemStarTimer%10===0) updateItemSlots(); if(itemStarTimer<=0){ updateItemSlots(); tb.innerText=""; } }
+    if(itemBulletTimer>0){ itemBulletTimer--; if(itemBulletTimer%10===0) updateItemSlots(); }
+    if(itemMushroomTimer>0){ itemMushroomTimer--; if(itemMushroomTimer%10===0) updateItemSlots(); }
+    if(itemMegaTimer>0){ itemMegaTimer--; if(itemMegaTimer%10===0) updateItemSlots(); }
+    
+    // ステータス表示更新
+    updateStatusEffects();
+
+    // --- アイテムボックス ---
+    npcs.forEach(n => { if (n.pickupCooldown > 0) n.pickupCooldown--; });
+
+    itemBoxes.forEach(box=>{
+        box.mesh.rotation.y += 0.03;
+        if(box.respawnTimer>0){ box.respawnTimer--; if(box.respawnTimer===0) box.mesh.visible=true; }
+        else if(box.mesh.visible){
+            if(carPos.distanceTo(box.mesh.position)<8){
+                let empty=-1;
+                if(heldItems[0]===null) empty=0;
+                else if(heldItems[1]===null) empty=1;
+                if(empty===-1){ 
+                    box.mesh.visible=false; box.respawnTimer=300; 
+                    let drop = getRandomItemByRank(getPlayerRank());
+                    spawnDroppedItem(drop, carGroup.position); 
+                    return; 
+                }
+                box.mesh.visible=false; box.respawnTimer=300;
+                if(!isItemRoulette && itemBulletTimer<=0){ soundItem(); isItemRoulette=true; rouletteSlot=empty; rouletteTimer=1000; }
+            } else {
+                let npcTook = false;
+                for(let j=0;j<npcs.length;j++){
+                    const n = npcs[j];
+                    if (n.pickupCooldown > 0) continue;
+                    if(n.mesh.position.distanceTo(box.mesh.position)<14){
+                        box.mesh.visible=false; box.respawnTimer=300;
+                        if(!n.heldItem && n.boostTimer<=0){
+                            let ni = getRandomNpcItem();
+                            n.heldItem=ni;
+                            n.itemUseTimer=Math.floor(Math.random()*60)+20;
+                            n.pickupCooldown = 5;
+                            npcTook = true;
+                        }
+                        break;
+                    }
+                }
+                if (npcTook) return;
+            }
+        }
+    });
+
+    // --- ルーレット ---
+    if(isItemRoulette){
+        rouletteTimer -= 16.66;
+        const randStr="🎲 "+getEmojiForItem(itemTypes[Math.floor(Math.random()*itemTypes.length)]);
+        const slot1 = document.getElementById('slot-1');
+        const slot2 = document.getElementById('slot-2');
+        if(rouletteSlot===0) {
+            slot1.querySelector('.slot-emoji').textContent = randStr;
+            slot1.querySelector('.slot-label').textContent = '抽選中... [Shiftで早切り]';
+            slot1.classList.add('has-item');
+        } else if(rouletteSlot===1) {
+            slot2.querySelector('.slot-emoji').textContent = randStr;
+            slot2.querySelector('.slot-label').textContent = '抽選中...';
+            slot2.classList.add('has-item');
+        }
+        if(rouletteTimer<=0){
+            isItemRoulette=false; soundItem();
+            let newItem=getRandomItemByRank(getPlayerRank());
+            if(newItem==="ファイヤーフラワー") fireFlowerAmmo=8;
+            if(rouletteSlot===0) heldItems[0]=newItem;
+            else if(rouletteSlot===1) heldItems[1]=newItem;
+            else spawnDroppedItem(newItem, carGroup.position);
+            rouletteSlot=-1; 
+            shiftItems();
+            updateItemSlots();
+        }
+    }
+
+    if(poleSpinTimer>0 && isSquishedTimer===0){ 
+        poleSpinTimer--; isDrifting=false; isWallRiding=false; carModel.rotation.y+=0.4; 
+        tb.innerText="🌀 ポールトリック！ 🌀"; tb.style.color="#0055ff"; 
+        if(poleSpinTimer===0){ carModel.rotation.set(0,0,0); turboTimer=35; speed=2.3; soundBoost(); tb.innerText="✨ ポールブースト！ ✨"; tb.style.color="#ffeb3b"; } 
+    }
+
+    if(itemStarTimer>0){ npcs.forEach(n=>{ if(carGroup.position.distanceTo(n.mesh.position)<8.0 && n.isSquished<=0 && n.isStar<=0 && n.isMega<=0){ n.isSquished=120; n.boostTimer=0; soundHit(); tb.innerText="⭐ スター体当たり！"; tb.style.color="#ffff00"; showHitPopup("⭐ スター体当たり！", "NPCにヒット！", "#ffff00"); } }); }
+
+    // --- 当たり判定 ---
+    const pMass=weightStats[playerWeight].mass;
+    for(let j=0;j<npcs.length;j++){
+        const n=npcs[j];
+        if(n.isSquished>0||n.isStar>0) continue;
+        const dx=carGroup.position.x-n.mesh.position.x, dz=carGroup.position.z-n.mesh.position.z, dist=Math.sqrt(dx*dx+dz*dz);
+        if(dist<3.5 && dist>0.01){
+            const nx=dx/dist, nz=dz/dist, nM=n.mass, total=pMass+nM;
+            const pk=(nM/total)*2.5, nk=(pMass/total)*2.5;
+            carGroup.position.x += nx*pk; carGroup.position.z += nz*pk;
+            n.mesh.position.x -= nx*nk; n.mesh.position.z -= nz*nk;
+            const sf=Math.min(Math.abs(speed)*0.3,1.5);
+            speed *= (1 - nM/total*0.5);
+            n.velocityX = -nx*nk*0.5; n.velocityZ = -nz*nk*0.5;
+            n.isCrashing=true; n.crashTimer=20;
+            soundCrash();
+            tb.innerText=`💥 接触！ (${playerWeight} vs ${n.weight})`; tb.style.color="#ff6600";
+        }
+    }
+
+    // NPC同士
+    for(let i=0;i<npcs.length;i++){ for(let j=i+1;j<npcs.length;j++){ const a=npcs[i], b=npcs[j]; if(a.isSquished>0||b.isSquished>0||a.isStar>0||b.isStar>0) continue; const dx=a.mesh.position.x-b.mesh.position.x, dz=a.mesh.position.z-b.mesh.position.z, dist=Math.sqrt(dx*dx+dz*dz); if(dist<3.2 && dist>0.01){ const nx=dx/dist, nz=dz/dist, total=a.mass+b.mass; const ak=(b.mass/total)*1.5, bk=(a.mass/total)*1.5; a.mesh.position.x+=nx*ak; a.mesh.position.z+=nz*ak; b.mesh.position.x-=nx*bk; b.mesh.position.z-=nz*bk; a.isCrashing=true; a.crashTimer=15; b.isCrashing=true; b.crashTimer=15; } } }
+    for(let i=0;i<npcs.length;i++){ if(npcs[i].crashTimer>0){ npcs[i].crashTimer--; if(npcs[i].crashTimer<=0) npcs[i].isCrashing=false; } }
+
+    // --- エフェクト ---
+    if(itemStarTimer>0){ sparkL.material.visible=true; sparkR.material.visible=true; sparkL.material.color.setHSL((Date.now()*0.006)%1,1,0.5); sparkR.material.color.setHSL((Date.now()*0.006)%1,1,0.5); carModel.material.color.setHSL((Date.now()*0.015)%1,1,0.6); carModel.material.transparent=false; carModel.material.opacity=1.0; }
+    else if(itemBulletTimer>0){ sparkL.material.visible=true; sparkR.material.visible=true; sparkL.material.color.setHex(0xff3333); sparkR.material.color.setHex(0xff3333); carModel.material.color.setHex(0x111111); carModel.material.transparent=false; carModel.material.opacity=1.0; }
+    else { updatePlayerColor(); if(playerHitInvincibleTimer>0){ carModel.material.transparent=true; carModel.material.opacity=(Math.floor(Date.now()/60)%2===0)?0.3:0.9; } else { carModel.material.transparent=false; carModel.material.opacity=1.0; }
+    if(poleSpinTimer>0 && isSquishedTimer===0){ sparkL.material.visible=true; sparkR.material.visible=true; sparkL.material.color.setHex(0x0055ff); sparkR.material.color.setHex(0x0055ff); }
+    else if(keys[" "] && jumpChargeTime>0 && carY<=0.15 && canChargeJump){ sparkL.material.visible=true; sparkR.material.visible=true; let ratio=Math.min(jumpChargeTime/50,1.0); if(ratio>=0.85){ let hue=(Date.now()/5)%360; let rc=new THREE.Color(`hsl(${hue},100%,55%)`); sparkL.material.color.copy(rc); sparkR.material.color.copy(rc); } else if(ratio>=0.4){ sparkL.material.color.setHex(0x9933ff); sparkR.material.color.setHex(0x9933ff); } else { sparkL.material.color.setHex(0x3399ff); sparkR.material.color.setHex(0x3399ff); } }
+    else if(isDrifting && carY<=(ifloor.position.y+0.2)){ sparkL.material.visible=true; sparkR.material.visible=true; if(driftCharge>100){ sparkL.material.color.setHex(0x00ffff); sparkR.material.color.setHex(0x00ffff); } else if(driftCharge>40){ sparkL.material.color.setHex(0xffaa00); sparkR.material.color.setHex(0xffaa00); } else { sparkL.material.color.setHex(0xff3333); sparkR.material.color.setHex(0xff3333); } }
+    else if(turboTimer>0){ sparkL.material.visible=true; sparkR.material.visible=true; sparkL.material.color.setHex(0x00ffff); sparkR.material.color.setHex(0x00ffff); }
+    else { sparkL.material.visible=false; sparkR.material.visible=false; } }
+
+    // エリア
+    let area="";
+    let inFactory=(carPos.x>LEFT_WALL_X-5 && carPos.x<RIGHT_WALL_X+5 && carPos.z>-150 && carPos.z<50);
+    if(inFactory){ area="🏭 工場エリア"; scene.background.setHex(0x111116); dirLight.intensity=0.1; }
+    else { area="🏎️ サーキットコース"; scene.background.setHex(0x557799); dirLight.intensity=0.8; }
+
+    // 壁走り
+    let pad=2.0;
+    if(wallKickIgnoreTimer>0) wallKickIgnoreTimer--;
+    if(inFactory && wallKickIgnoreTimer===0 && poleSpinTimer<=0 && itemBulletTimer<=0){
+        if(carY>0.5 && !isWallRiding && Math.abs(wallKickVelocityX)<0.3){
+            let entered=false;
+            if(carPos.x>=RIGHT_WALL_X-pad-1.5){ isWallRiding=true; wallRideSide=1; jumpVelocity=0; entered=true; }
+            else if(carPos.x<=LEFT_WALL_X+pad+1.5){ isWallRiding=true; wallRideSide=-1; jumpVelocity=0; entered=true; }
+            if(entered){ speed=Math.max(speed,baseMaxSpeed); carGroup.rotation.y=(Math.cos(carGroup.rotation.y)>0)?0:Math.PI; }
+        }
+    } else { isWallRiding=false; }
+    if(isWallRiding && inFactory){ area="🧱 WALL RIDING !! 🧱"; if(carY<6.0) carY=THREE.MathUtils.lerp(carY,7.0,0.1); wallKickVelocityX=0; if(wallRideSide===1){ carPos.x=RIGHT_WALL_X-pad; carModel.rotation.z=-Math.PI/2; } else { carPos.x=LEFT_WALL_X+pad; carModel.rotation.z=Math.PI/2; } carGroup.rotation.y=(Math.cos(carGroup.rotation.y)>0)?0:Math.PI; if(carPos.z<=-148||carPos.z>=48||Math.abs(speed)<0.2) isWallRiding=false; }
+    else if(poleSpinTimer<=0 && itemBulletTimer<=0){ if(jumpActionTimer<=0){ if(Math.abs(wallKickVelocityX)>0.1) carModel.rotation.z+=0.22*Math.sign(wallKickVelocityX); else carModel.rotation.z=THREE.MathUtils.lerp(carModel.rotation.z,0,0.2); } carPos.x+=wallKickVelocityX; wallKickVelocityX*=0.90; if(inFactory){ if(carPos.x>=RIGHT_WALL_X-pad){ carPos.x=RIGHT_WALL_X-pad; speed*=0.7; wallKickVelocityX=0; } if(carPos.x<=LEFT_WALL_X+pad){ carPos.x=LEFT_WALL_X+pad; speed*=0.7; wallKickVelocityX=0; } } }
+
+    if(isSquishedTimer>0){ isSquishedTimer--; carGroup.scale.set(1.6,0.08,1.6); if(isSquishedTimer===0) carGroup.scale.set(1,1,1); }
+    if(itemMegaTimer>0){ itemMegaTimer--; carGroup.scale.set(2.5,2.5,2.5); if(itemMegaTimer===0) carGroup.scale.set(1,1,1); }
+
+    // 速度
+    const wStat=weightStats[playerWeight];
+    let maxSpeed=baseMaxSpeed*wStat.maxSpeedMul*(1+coins*0.005);
+    let accel=0.04*wStat.accelMul;
+    let decel=0.015*(1/wStat.accelMul);
+
+    let isWater=false, targetY=0, onRoad=false;
+    if(carPos.x>-40&&carPos.x<40&&carPos.z>-150&&carPos.z<350) onRoad=true;
+    if(carPos.x>-340&&carPos.x<40&&carPos.z>-240&&carPos.z<-160) onRoad=true;
+    if(carPos.x>-340&&carPos.x<-260&&carPos.z>-440&&carPos.z<-160) onRoad=true;
+    if(carPos.x>-340&&carPos.x<-100&&carPos.z>-440&&carPos.z<-360) onRoad=true;
+    let inPool=(carPos.x>=-80&&carPos.x<=330&&carPos.z>-460&&carPos.z<-340);
+    if(inPool){ onRoad=true; let onB1=(carPos.x>=-25&&carPos.x<=25), onB2=(carPos.x>=100&&carPos.x<=150), onB3=(carPos.x>=225&&carPos.x<=275); if(onB1||onB2||onB3||carPos.x>300){ targetY=0; area="🌉 プールの一本橋"; } else { targetY=-1; if(carY<=-0.8&&itemMushroomTimer<=0&&itemGoldenTimer<=0&&itemStarTimer<=0&&itemBulletTimer<=0){ area="🌊 プール水没減速"; maxSpeed=0.45; accel=0.01; isWater=true; } } }
+    if(carPos.x>310&&carPos.x<390&&carPos.z>-440&&carPos.z<-60) onRoad=true;
+    if(carPos.x>160&&carPos.x<390&&carPos.z>-140&&carPos.z<-60) onRoad=true;
+    if(carPos.x>160&&carPos.x<240&&carPos.z>-140&&carPos.z<290) onRoad=true;
+    if(carPos.x>-40&&carPos.x<240&&carPos.z>210&&carPos.z<290) onRoad=true;
+    let isDirt=(raceState===2&&!onRoad&&carY<=targetY+0.1&&itemMushroomTimer<=0&&itemMegaTimer<=0&&itemGoldenTimer<=0&&itemStarTimer<=0&&itemBulletTimer<=0);
+    if(isDirt){ area="🟫 泥エリア！超減速"; maxSpeed=0.15; accel=0.005; if(turboTimer>0) turboTimer=0; }
+    if(itemBulletTimer>0) area="🚀 キラー突進中！";
+    status.innerText=area;
+
+    // ジャンプ台
+    if(Math.abs(carPos.x-ramp.position.x)<30&&Math.abs(carPos.z-ramp.position.z)<30&&carY<=targetY+0.15){ jumpVelocity=0.55; speed=Math.max(speed,2.4); hasJumpActioned=false; soundBoost(); tb.innerText="💨 ジャンプ台！"; tb.style.color="#ff8800"; }
+    if(carPos.x>10&&carPos.x<30&&Math.abs(carPos.z-sr1.position.z)<20&&carY<=targetY+0.15){ jumpVelocity=0.55; speed=Math.max(speed,2.4); hasJumpActioned=false; soundBoost(); tb.innerText="💨 小ジャンプ！"; tb.style.color="#ff8800"; }
+    if(carPos.x>135&&carPos.x<155&&Math.abs(carPos.z-sr2.position.z)<20&&carY<=targetY+0.15){ jumpVelocity=0.55; speed=Math.max(speed,2.4); hasJumpActioned=false; soundBoost(); tb.innerText="💨 小ジャンプ！"; tb.style.color="#ff8800"; }
+
+    npcs.forEach(n=>{
+        const nx=n.mesh.position.x, nz=n.mesh.position.z;
+        if(Math.abs(nx-ramp.position.x)<30&&Math.abs(nz-ramp.position.z)<30&&n.isSquished<=0){ n.boostTimer=Math.max(n.boostTimer,40); n.mesh.position.y=1.2; }
+        if(nx>10&&nx<30&&Math.abs(nz-sr1.position.z)<20&&n.isSquished<=0){ n.boostTimer=Math.max(n.boostTimer,25); n.mesh.position.y=0.8; }
+        if(nx>135&&nx<155&&Math.abs(nz-sr2.position.z)<20&&n.isSquished<=0){ n.boostTimer=Math.max(n.boostTimer,25); n.mesh.position.y=0.8; }
+        if(n.mesh.position.y>0&&n.isSquished<=0) n.mesh.position.y=Math.max(0,n.mesh.position.y-0.03);
+        else n.mesh.position.y=0;
+    });
+
+    if(jumpActionTimer>0){ jumpActionTimer--; carModel.rotation.y+=0.35; carModel.rotation.x+=jumpRotX; carModel.rotation.z+=jumpRotZ; if(jumpActionTimer===0) carModel.rotation.set(0,0,0); }
+
+    if(!isWallRiding && itemBulletTimer<=0){
+        if(carY>targetY||jumpVelocity>0){ carY+=jumpVelocity; jumpVelocity-=0.022; if(carY<targetY){ carY=targetY; jumpVelocity=0; if(wallKickCount>0){ turboTimer=15+wallKickCount*12; tb.innerText=`💨 着地ブースト！ [壁キック:${wallKickCount}回]`; tb.style.color="#00ff66"; wallKickCount=0; hasJumpActioned=false; soundBoost(); } else if(hasJumpActioned){ turboTimer=pendingChargeTurbo; speed=Math.max(speed,pendingChargeSpeed); tb.innerText=pendingChargeMsg; tb.style.color=pendingChargeColor; soundBoost(); hasJumpActioned=false; } } }
+        else { carY=THREE.MathUtils.lerp(carY,targetY,0.2); }
+    }
+    carGroup.position.y=carY;
+
+    if(keys[" "]&&carY<=0.15&&isSquishedTimer<=0&&itemBulletTimer<=0&&!isWallRiding&&poleSpinTimer<=0&&canChargeJump) jumpChargeTime=Math.min(jumpChargeTime+1,60);
+
+    if(raceState===1||isSquishedTimer>0) speed=0;
+    else if(poleSpinTimer>0) speed=Math.max(speed,1.8);
+    else if(itemBulletTimer>0){}
+    else if(isWallRiding){}
+    else if(itemMushroomTimer>0){ itemMushroomTimer--; speed=3.0; }
+    else if(itemGoldenTimer>0) speed=3.0;
+    else if(itemStarTimer>0) speed=2.8;
+    else if(turboTimer>0){ turboTimer--; speed=Math.max(speed,2.3); }
+    else if(turboTimer<0){ turboTimer++; speed=0; }
+    else {
+        if(keys.w) speed=Math.min(speed+accel,maxSpeed);
+        else if(keys.s) speed=Math.max(speed-accel,-maxSpeed/2);
+        else speed=speed>0?Math.max(speed-decel,0):Math.min(speed+decel,0);
+    }
+
+    let turn=0, canDrift=(carY<=targetY+0.1&&!isWater&&!isWallRiding&&poleSpinTimer<=0&&itemBulletTimer<=0);
+    if(keys.v&&!isDrifting&&Math.abs(speed)>0.4&&!keys.s&&isSquishedTimer<=0&&canDrift){ if(keys.d){ isDrifting=true; driftDir=1; } else if(keys.a){ isDrifting=true; driftDir=-1; } }
+    if(!keys.v&&isDrifting){ isDrifting=false; if(turboState===1){ turboTimer=15; soundBoost(); tb.innerText="⚡ ミニターボ！"; tb.style.color="#00ffff"; } else if(turboState===2){ turboTimer=40; soundBoost(); tb.innerText="🔥 ウルトラミニターボ！！"; tb.style.color="#ff00ff"; } turboState=0; driftCharge=0; }
+    if(isWallRiding) turn=0;
+    else if(isDrifting&&carY<=targetY+0.1&&poleSpinTimer<=0){ let ds=driftDir===1?(keys.d?1.5:(keys.a?0.3:0.8)):(keys.a?1.5:(keys.d?0.3:0.8)); turn=-0.024*driftDir*ds; driftCharge+=ds*2.5; if(driftCharge>100) turboState=2; else if(driftCharge>40) turboState=1; else turboState=0; }
+    else if(poleSpinTimer<=0&&itemBulletTimer<=0){ if(Math.abs(speed)>0.01&&raceState!==1){ let sens=isWallRiding?0.012:0.034; if(keys.a) turn=sens*(speed>0?1:-1); if(keys.d) turn=-sens*(speed>0?1:-1); } }
+
+    if(raceState!==1){
+        let fwd=new THREE.Vector3(-Math.sin(carGroup.rotation.y),0,-Math.cos(carGroup.rotation.y)).normalize();
+        if(itemBulletTimer>0){
+            bulletProgress+=0.0038;
+            if(bulletProgress>=1){ bulletProgress-=1; playerLap++; if(playerLap>gameTargetLaps&&gameMode!=='battle'&&gameMode!=='survival'){ isFinished=true; raceState=3; } }
+            let p=bulletProgress, seg=Math.floor(p*NODE_COUNT), sp=(p*NODE_COUNT)%1;
+            let sn=npcPathNodes[seg%NODE_COUNT], en=npcPathNodes[(seg+1)%NODE_COUNT];
+            let tx=sn.x+(en.x-sn.x)*sp, tz=sn.z+(en.z-sn.z)*sp;
+            carGroup.position.set(tx,0.4,tz);
+            let ang=Math.atan2(en.x-sn.x, en.z-sn.z);
+            carGroup.rotation.y=ang; carGroup.scale.set(1.8,1.8,2.5);
+            npcs.forEach(n=>{ if(carGroup.position.distanceTo(n.mesh.position)<14.0&&n.isSquished<=0){ n.isSquished=150; n.boostTimer=0; soundHit(); tb.innerText="🚀💥 キラーアタック！"; tb.style.color="#ff1111"; } });
+            if(itemBulletTimer===0){ carGroup.scale.set(1,1,1); updatePlayerColor(); carGroup.rotation.y=ang; turboTimer=50; speed=2.4; }
+        } else {
+            if(poleSpinTimer<=0) carGroup.rotation.y+=turn;
+            fwd=new THREE.Vector3(-Math.sin(carGroup.rotation.y),0,-Math.cos(carGroup.rotation.y)).normalize();
+            carGroup.position.addScaledVector(fwd,speed);
+        }
+        if(raceState===2){
+            if(carPos.z<-300&&carPos.x>-100) midCheckpointPassed=true;
+            if(midCheckpointPassed&&Math.abs(carPos.x)<40&&carPos.z>40&&carPos.z<62&&fwd.z<0){
+                midCheckpointPassed=false;
+                if(!isFinished){
+                    playerLap++;
+                    coinsArray.forEach(c=>{ c.mesh.visible=true; c.collected=false; });
+                    if(gameMode==='endurance'&&playerLap>gameTargetLaps){ isFinished=true; raceState=3; }
+                    if(gameMode==='timeattack'&&playerLap>gameTargetLaps){ isFinished=true; raceState=3; let t=timeAttackCurrentTime; if(!timeAttackBestTime||t<parseFloat(timeAttackBestTime)){ timeAttackBestTime=t; localStorage.setItem('timeAttackBestTime',String(t)); document.getElementById("best-time-display").innerHTML=`🏆 ベスト更新！ ${formatTime(t)}`; } tb.innerText=`⏱️ タイム: ${formatTime(t)}`; }
+                    if(gameMode==='battle'&&coins>=gameCoinTarget){ isFinished=true; raceState=3; tb.innerText="🍌 バナナバトル勝利！"; }
+                    if(gameMode==='survival'){ let alive=npcs.filter(n=>n.isSquished<=0&&n.isStar<=0); if(alive.length===0&&playerHP>0){ isFinished=true; raceState=3; tb.innerText="💀 サバイバル勝利！"; } if(playerHP<=0){ isFinished=true; raceState=3; tb.innerText="💀 脱落！ サバイバル敗北..."; tb.style.color="#ff0000"; } }
+                }
+            }
+            lap.innerText=isFinished?"Lap: FINISHED":`Lap: ${playerLap}/${gameTargetLaps===999?'∞':gameTargetLaps}`;
+            let myRank=getPlayerRank();
+            rank.innerText=gameMode==='timeattack'?`⏱️ タイムアタック`:`順位: ${myRank}位 / ${npcs.length+1}`;
+        }
+    }
+
+    // NPC更新
+    npcs.forEach((n,idx)=>{
+        if(raceState===2){
+            let nSpeed=(baseMaxSpeed*n.topSpeedMul)/totalTrackLength;
+            let pVal=playerLap+playerProgress, nVal=n.lap+n.progress;
+            if(nVal<pVal) nSpeed+=0.00008*n.accelMul;
+            if(n.isSquished>0){ n.isSquished--; nSpeed=0.0001; n.mesh.scale.set(1.5,0.1,1.5); }
+            else { n.mesh.scale.set(1,1,1); if(n.boostTimer>0){ n.boostTimer--; nSpeed=(baseMaxSpeed*n.topSpeedMul*1.2)/totalTrackLength; } }
+            if(n.isCrashing) nSpeed*=0.6;
+            if(n.isStar>0){ n.isStar--; if(n.mesh.position.distanceTo(carGroup.position)<7.0&&itemStarTimer<=0&&itemMegaTimer<=0&&isSquishedTimer<=0&&playerHitInvincibleTimer<=0){ if(gameMode==='survival'){ playerHP--; document.getElementById("hp-text").innerHTML=`❤️ HP: ${playerHP}/${maxHP}`; if(playerHP<=0){ isFinished=true; raceState=3; tb.innerText="💀 脱落！"; tb.style.color="#ff0000"; return; } } isSquishedTimer=60; speed=0; turboTimer=0; isDrifting=false; driftCharge=0; turboState=0; itemMushroomTimer=0; itemGoldenTimer=0; playerHitInvincibleTimer=180; soundHit(); dropCoins(); tb.innerText="💥 スター衝突！"; tb.style.color="#ff3333"; } }
+            n.progress+=nSpeed; if(n.progress>=1){ n.progress-=1; n.lap++; }
+            if(n.heldItem){ n.itemUseTimer--; if(n.itemUseTimer<=0) useNpcItem(n); }
+        }
+        let p=Math.max(0,n.progress), seg=Math.floor(p*NODE_COUNT), sp=(p*NODE_COUNT)%1;
+        let sn=npcPathNodes[seg%NODE_COUNT], en=npcPathNodes[(seg+1)%NODE_COUNT];
+        let nx=sn.x+(en.x-sn.x)*sp, nz=sn.z+(en.z-sn.z)*sp+((idx%2===0)?5:-5);
+        let ny=0;
+        if(nx>=-80&&nx<=330&&nz>-460&&nz<-340){ let onB=(nx>=-25&&nx<=25)||(nx>=100&&nx<=150)||(nx>=225&&nx<=275)||(nx>300); if(!onB) ny=0; }
+        if(n.mesh.position.y>0.2) ny=n.mesh.position.y;
+        n.mesh.position.set(nx+n.velocityX*0.5, ny, nz+n.velocityZ*0.5);
+        n.velocityX*=0.9; n.velocityZ*=0.9;
+        if(n.isMega>0){ n.isMega--; n.mesh.scale.set(2.3,2.3,2.3); }
+        n.mesh.lookAt(en.x,0,en.z);
+    });
+
+    // カメック更新
+    updateKameks();
+    updateKamekTraps();
+
+    updateIncomingWarnings();
+    renderer.render(scene,camera);
+    requestAnimationFrame(animate);
+}
+
+window.addEventListener('resize', ()=>{
+    camera.aspect=window.innerWidth/window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth,window.innerHeight);
+});
+
+requestAnimationFrame(animate);
+</script>
+</body>
+</html>
