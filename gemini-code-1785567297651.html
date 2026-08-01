@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>ひらがな暗号変換器</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; max-width: 600px; margin: auto; background: #f9f9f9; }
+        h2 { color: #333; }
+        textarea { width: 100%; height: 100px; font-size: 16px; margin-bottom: 10px; padding: 10px; box-sizing: border-box; }
+        .btn-group { display: flex; gap: 10px; margin-bottom: 15px; }
+        button { padding: 10px 20px; font-size: 16px; cursor: pointer; background: #4CAF50; color: white; border: none; border-radius: 5px; }
+        button:hover { background: #45a049; }
+        .result-box { background: #fff; border: 1px solid #ccc; padding: 15px; border-radius: 5px; min-height: 60px; word-break: break-all; font-size: 18px; line-height: 1.5; }
+    </style>
+</head>
+<body>
+
+    <h2>ひらがな ➔ 暗号 変換ツール</h2>
+    
+    <p>ひらがなを入力してください：</p>
+    <textarea id="inputText" placeholder="がっこう..."></textarea>
+
+    <div class="btn-group">
+        <button onclick="convertToCipher()">暗号に変換！</button>
+    </div>
+
+    <h3>変換結果：</h3>
+    <div class="result-box" id="outputResult">ここに結果が表示されます</div>
+
+    <script>
+        // 暗号ルール（対応表）
+        const map = {
+            // 清音
+            'あ': '吾', 'い': '威', 'う': '鵜', 'え': '柄', 'お': '御',
+            'か': '架', 'き': '樹', 'く': '軀', 'け': '褻', 'こ': '弧',
+            'さ': '唆', 'し': '詞', 'す': '簾', 'せ': '畝', 'そ': '疎',
+            'た': '陀', 'ち': '黹', 'つ': '兜', 'て': '輝', 'と': '賭',
+            'な': '那', 'に': '煮', 'ぬ': '忽', 'ね': '錬', 'の': '盧',
+            'は': '齒', 'ひ': '秘', 'ふ': '麩', 'へ': '舳', 'ほ': '葡',
+            'ま': '摩', 'み': '観', 'む': '霧', 'め': '嘛', 'も': '喪',
+            'や': 'や', 'ゆ': 'ゆ', 'よ': 'よ',
+            'ら': '蠡', 'り': '励', 'る': '魯', 'れ': '糲', 'ろ': '露',
+            'わ': '環', 'を': 'WO', 'ん': 'n',
+
+            // 濁点（＋i）
+            'が': '架i', 'ぎ': '樹i', 'ぐ': '軀i', 'げ': '褻i', 'ご': '弧i',
+            'ざ': '唆i', 'じ': '詞i', 'ず': '簾i', 'ぜ': '畝i', 'ぞ': '疎i',
+            'だ': '陀i', 'ぢ': '黹i', 'づ': '兜i', 'で': '輝i', 'ど': '賭i',
+            'ば': '齒i', 'び': '秘i', 'ぶ': '麩i', 'べ': '舳i', 'ぼ': '葡i',
+
+            // 半濁点（＋k）
+            'ぱ': '齒k', 'ぴ': '秘k', 'ぷ': '麩k', 'ぺ': '舳k', 'ぽ': '葡k',
+
+            // 小文字（＋q）
+            'っ': '兜q', 'ゃ': 'やq', 'ゅ': 'ゆq', 'ょ': 'よq',
+            'ぁ': '吾q', 'ぃ': '威q', 'ぅ': '鵜q', 'ぇ': '柄q', 'ぉ': '御q'
+        };
+
+        function convertToCipher() {
+            let input = document.getElementById('inputText').value;
+            let result = '';
+
+            for (let i = 0; i < input.length; i++) {
+                let char = input[i];
+                if (map[char]) {
+                    result += map[char];
+                } else {
+                    result += char; // 記号やスペースなどはそのまま
+                }
+            }
+
+            document.getElementById('outputResult').innerText = result;
+        }
+    </script>
+
+</body>
+</html>
